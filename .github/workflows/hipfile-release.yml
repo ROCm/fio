@@ -29,10 +29,11 @@ jobs:
           artifact-ids: >-
             ${{
               format(
-                '{0},{1},{2}',
+                '{0},{1},{2},{3}',
                 needs.build_debian_pkg.outputs.fio_pkg_debug_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_example_artifact_id,
-                needs.build_debian_pkg.outputs.fio_pkg_artifact_id
+                needs.build_debian_pkg.outputs.fio_pkg_artifact_id,
+                needs.build_debian_pkg.outputs.fio_pkg_source_artifact_id
               )
             }}
       - name: List Releases
@@ -79,4 +80,5 @@ jobs:
             latest \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_debug_filename }} \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_example_filename }} \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_filename }}
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_filename }} \
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_source_filename }}

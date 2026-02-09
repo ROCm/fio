@@ -21,6 +21,12 @@ on:
       fio_pkg_artifact_id:
         description: "GHA Artifact ID for runtime FIO DEB package."
         value: ${{ jobs.build.outputs.fio_pkg_artifact_id }}
+      fio_pkg_source_filename:
+        description: "Filename for the FIO source DEB package."
+        value: ${{ jobs.build.outputs.fio_pkg_source_filename }}
+      fio_pkg_source_artifact_id:
+        description: "GHA Artifact ID for source FIO DEB package."
+        value: ${{ jobs.build.outputs.fio_pkg_source_artifact_id }}
 permissions:
   contents: read
 jobs:
@@ -40,6 +46,8 @@ jobs:
       fio_pkg_example_artifact_id: ${{ steps.artifact-example.outputs.artifact-id }}
       fio_pkg_filename: ${{ steps.pkg-metadata.outputs.FIO_PKG_FILENAME }}
       fio_pkg_artifact_id: ${{ steps.artifact-runtime.outputs.artifact-id }}
+      fio_pkg_source_filename: ${{ steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME }}
+      fio_pkg_source_artifact_id: ${{ steps.artifact-source.outputs.artifact-id }}
     steps:
       - name: Setup ROCm Repo
         run: |
@@ -93,9 +101,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
         with:
           path: ${{ github.workspace }}/fio/fio-src
+      - name: Prepare FIO tarball for DEB Source package
+        working-directory: ${{ github.workspace }}/fio
+        run: |
+          export FIO_VERSION="$(./fio-src/FIO-VERSION-GEN 2>&1 | sed -E 's|.*fio-([0-9.]+).*|\1|')"
+          echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
+          tar -cjf ./fio_${FIO_VERSION}.orig.tar.bz2 \
+            --exclude="debian" \
+            --exclude-vcs \
+            --transform "s|^fio-src|fio-${FIO_VERSION}|" \
+            ./fio-src
       - name: Build FIO with hipFile support
         working-directory: ${{ github.workspace }}/fio/fio-src
-        run: dpkg-buildpackage --sanitize-env --build=binary -uc
+        run: dpkg-buildpackage --sanitize-env --build=full -uc
       - name: Capture package metadata
         id: pkg-metadata
         working-directory: ${{ github.workspace }}/fio
@@ -105,9 +123,11 @@ jobs:
           FIO_PKG_DEBUG_FILENAME="$(echo fio-dbgsym_[0-9]*.ddeb)"
           FIO_PKG_EXAMPLE_FILENAME="$(echo fio-examples_[0-9]*.deb)"
           FIO_PKG_FILENAME="$(echo fio_[0-9]*.deb)"
+          FIO_PKG_SOURCE_FILENAME="$(echo fio_[0-9]*.debian.tar.xz)"
           echo "FIO_PKG_DEBUG_FILENAME=${FIO_PKG_DEBUG_FILENAME}" >> "${GITHUB_OUTPUT}"
           echo "FIO_PKG_EXAMPLE_FILENAME=${FIO_PKG_EXAMPLE_FILENAME}" >> "${GITHUB_OUTPUT}"
           echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
+          echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
       - name: Print package metadata for debugging
         working-directory: ${{ github.workspace }}/fio
         run: |
@@ -117,6 +137,8 @@ jobs:
           ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.pkg-metadata.outputs.FIO_PKG_DEBUG_FILENAME) }}
           echo -e "\n\nExample Package:"
           ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.pkg-metadata.outputs.FIO_PKG_EXAMPLE_FILENAME) }}
+          echo -e "\n\nSource Package:"
+          ${{ format('tar --list -f {0}', steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME) }}
       - name: Upload runtime FIO Package as an Artifact
         id: artifact-runtime
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
@@ -141,6 +163,15 @@ jobs:
         with:
           name: ${{ steps.pkg-metadata.outputs.FIO_PKG_EXAMPLE_FILENAME }}
           path: ${{ format('{0}/fio/{1}', github.workspace, steps.pkg-metadata.outputs.FIO_PKG_EXAMPLE_FILENAME) }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Upload source FIO Package as an Artifact
+        id: artifact-source
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+        with:
+          name: ${{ steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME }}
+          path: ${{ format('{0}/fio/{1}', github.workspace, steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
