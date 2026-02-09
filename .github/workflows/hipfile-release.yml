@@ -67,6 +67,7 @@ jobs:
         run: |
           shopt -s nullglob
           echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb}
+          echo fio{,-engine-hipfile}{,-debuginfo,-debugsource}-[0-9]*.rpm
           gh release create \
             --notes "
               Latest Build as of: $(date)
