@@ -66,7 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb}
+          echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb,debian.tar.xz}
           echo fio{,-engine-hipfile}{,-debuginfo,-debugsource}-[0-9]*.rpm
           gh release create \
             --notes "
