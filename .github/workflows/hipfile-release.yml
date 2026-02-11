@@ -15,10 +15,12 @@ jobs:
     uses: ./.github/workflows/build-debian.yml
   build_rpm_pkg:
     uses: ./.github/workflows/build-rpm.yml
+  build_rpm_suse_pkg:
+    uses: ./.github/workflows/build-rpm-suse.yml
   release_FIO_with_hipFile:
     if: ${{ github.event.pull_request.merged == true }}
     runs-on: [ubuntu-24.04]
-    needs: [build_debian_pkg, build_rpm_pkg]
+    needs: [build_debian_pkg, build_rpm_pkg, build_rpm_suse_pkg]
     permissions:
       contents: write
     steps:
@@ -31,7 +33,7 @@ jobs:
           artifact-ids: >-
             ${{
               format(
-                '{0},{1},{2},{3},{4},{5},{6},{7},{8}',
+                '{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}',
                 needs.build_debian_pkg.outputs.fio_pkg_debug_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_example_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_artifact_id,
@@ -40,7 +42,10 @@ jobs:
                 needs.build_rpm_pkg.outputs.fio_pkg_debug_source_artifact_id,
                 needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_artifact_id,
                 needs.build_rpm_pkg.outputs.fio_pkg_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_artifact_id
+                needs.build_rpm_pkg.outputs.fio_pkg_artifact_id,
+                needs.build_rpm_suse_pkg.outputs.fio_pkg_artifact_id,
+                needs.build_rpm_suse_pkg.outputs.fio_pkg_source_artifact_id,
+                needs.build_rpm_suse_pkg.outputs.fio_pkg_gfio_artifact_id
               )
             }}
       - name: List Releases
@@ -94,4 +99,7 @@ jobs:
             ${{ needs.build_rpm_pkg.outputs.fio_pkg_debug_source_filename }} \
             ${{ needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_filename }} \
             ${{ needs.build_rpm_pkg.outputs.fio_pkg_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_filename }}
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_filename }} \
+            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_filename }} \
+            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_source_filename }} \
+            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_gfio_filename }}
