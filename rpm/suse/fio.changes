@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Mon Feb  9 23:22:37 UTC 2026 - AMD ROCm hipFile <hipfile-maintainer@amd.com>
+
+- Add packaging support for the hipFile IO Engine
+- CMake/Configure: Add support to build the hipFile IO Engine
+- Update to upstream v3.41
+
+-------------------------------------------------------------------
 Wed Jul  2 09:00:37 UTC 2025 - Jan Engelhardt <jengelh@inai.de>
 
 - Deactivate glusterfs backend for fio

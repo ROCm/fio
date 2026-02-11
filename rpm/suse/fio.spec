@@ -32,9 +32,22 @@
 %bcond_without libnuma
 %endif
 %bcond_without librdmacm
+# hipFile: Add packaging arg for the hipFile IO engine.
+%bcond_with libhipfile
 Name:           fio
-Version:        3.38
-Release:        0
+Version:        3.41
+# hipFile: SUSE generally lets it's own build system OBS prepend the SUSE
+#          version to the release without defining it in the .spec file.
+#          To keep things simple, we are not using the OBS front-end, and
+#          will use `rpmbuild` directly.
+#
+#          Because of the above, it is also the builder's responsibility to
+#          define in the following SUSE macros that OBS would otherwise set:
+#          - suse_version
+#          - sle_version
+#          - is_opensuse
+#          See /usr/lib/build/configs/<distro>.conf for their values.
+Release:        %{?dist}0.hipfile
 Summary:        Flexible I/O tester
 License:        GPL-2.0-only
 Group:          System/Benchmark
@@ -63,6 +76,9 @@ BuildRequires:  libpmem-devel
 %if %{with librdmacm}
 BuildRequires:  librdmacm-devel
 %endif
+%if %{with libhipfile}
+BuildRequires:  hipfile-devel
+%endif
 
 %description
 fio is an I/O tool meant to be used both for benchmark and stress/hardware
@@ -90,7 +106,9 @@ testers workstation whereas fio would be installed on the server.
 sed -i "s|%{_bindir}/bash|/bin/bash|g" tools/genfio
 sed -i "s|-O3|%{optflags}|g" Makefile
 # Not autotools configure
+# hipFile: Not tied to a particular ROCm version.
 ./configure \
+  %{?with_libhipfile:--enable-libhipfile} \
   --enable-gfio \
   --enable-libiscsi \
   --enable-libnbd \
