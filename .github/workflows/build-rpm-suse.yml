@@ -121,13 +121,15 @@ jobs:
           IS_OPENSUSE=$(source /etc/os-release; [[ ${ID} == opensuse* ]] && echo 1 || echo 0)
           SUSE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d", a[1], a[2]}' /etc/os-release)
           SLE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d00", a[1], a[2]}' /etc/os-release)
+          SUSE_DISTRO="opensuse$(source /etc/os-release && echo "${VERSION_ID//./}")."
+          echo "SUSE_DISTRO=${SUSE_DISTRO}" >> "${GITHUB_ENV}"
           rpmbuild \
             -ba \
             --define="_topdir $(realpath .)" \
             --define="is_opensuse ${IS_OPENSUSE}" \
             --define="suse_version ${SUSE_VERSION}" \
             --define="sle_version ${SLE_VERSION}" \
-            --define="dist ${SLE_VERSION}." \
+            --define="dist ${SUSE_DISTRO}" \
             --with=libhipfile \
             ./SPECS/fio.spec
       - name: Capture package metadata
@@ -139,9 +141,9 @@ jobs:
         run: |
           shopt -s nullglob
           ls -al ${_rpm_path} ${_srpm_path}
-          FIO_PKG_GFIO_FILENAME="$(basename ${_rpm_path}/gfio-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-[0-9]*.src.rpm)"
+          FIO_PKG_GFIO_FILENAME="$(basename ${_rpm_path}/gfio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
+          FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
+          FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.src.rpm)"
 
           echo "FIO_PKG_GFIO_FILENAME=${FIO_PKG_GFIO_FILENAME}" >> "${GITHUB_OUTPUT}"
           echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
