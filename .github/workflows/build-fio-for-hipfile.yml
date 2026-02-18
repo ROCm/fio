@@ -45,12 +45,18 @@ permissions:
   contents: read
   packages: read
 jobs:
-  build_FIO_debian:
-    if: ${{ inputs.platform == 'ubuntu' }}
-    uses: ./.github/workflows/build-debian.yml
-  build_FIO_fedora:
-    if: ${{ inputs.platform == 'rocky' }}
-    uses: ./.github/workflows/build-rpm.yml
-  build_FIO_suse:
-    if: ${{ inputs.platform == 'suse' }}
-    uses: ./.github/workflows/build-rpm-suse.yml
+  # build_FIO_debian:
+  #   if: ${{ inputs.platform == 'ubuntu' }}
+  #   uses: ./.github/workflows/build-debian.yml
+  # build_FIO_fedora:
+  #   if: ${{ inputs.platform == 'rocky' }}
+  #   uses: ./.github/workflows/build-rpm.yml
+  # build_FIO_suse:
+  #   if: ${{ inputs.platform == 'suse' }}
+  #   uses: ./.github/workflows/build-rpm-suse.yml
+  build_FIO_all:
+    uses: ./.github/workflows/build-fio.yml
+    with:
+      ais_hipfile_pkg_filename: ${{ inputs.ais_hipfile_pkg_filename }}
+      ais_hipfile_pkg_dev_filename: ${{ inputs.ais_hipfile_pkg_dev_filename }}
+      platform: ${{ inputs.platform }}
