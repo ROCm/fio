@@ -116,7 +116,7 @@ jobs:
             --exclude="rpm" \
             --exclude-vcs \
             --transform "s|^fio-src|fio-${FIO_VERSION}|" \
-            ./fio-src
+            fio-src
       - name: Setup rpmbuild env
         if: ${{ env.PKG_TYPE == 'RPM' }}
         working-directory: ${{ github.workspace }}/fio
@@ -226,15 +226,15 @@ jobs:
         working-directory: ${{ github.workspace }}/fio/rpmbuild
         run: |
           echo "Runtime Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.pkg-metadata.outputs.FIO_PKG_FILENAME) }}
+          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_FILENAME) }}
           echo -e "\n\nDebug Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.pkg-metadata.outputs.FIO_PKG_DEBUG_FILENAME) }}
+          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_DEBUG_FILENAME) }}
           echo -e "\n\nDebug Source Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.pkg-metadata.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME) }}
+          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME) }}
           echo -e "\n\nhipFile FIO Engine Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.pkg-metadata.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME) }}
+          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME) }}
           echo -e "\n\nSource Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME) }}
+          ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.build-fedora.outputs.FIO_PKG_SOURCE_FILENAME) }}
       - name: (Debian-based) Build FIO with hipFile support
         id: build-debian
         if: ${{ env.PKG_TYPE == 'DEB' }}
@@ -243,7 +243,7 @@ jobs:
           dpkg-buildpackage --sanitize-env --build=full -uc
 
           shopt -s nullglob
-          ls -al
+          cd .. && ls -al
           FIO_PKG_DEBUG_FILENAME="$(echo fio-dbgsym_[0-9]*.ddeb)"
           FIO_PKG_EXAMPLE_FILENAME="$(echo fio-examples_[0-9]*.deb)"
           FIO_PKG_FILENAME="$(echo fio_[0-9]*.deb)"
