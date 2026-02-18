@@ -43,6 +43,7 @@ on:
         value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_artifact_id }}
 permissions:
   contents: read
+  packages: read
 jobs:
   build_FIO_debian:
     if: ${{ inputs.platform == 'ubuntu' }}
