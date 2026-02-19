@@ -172,8 +172,6 @@ jobs:
       fio_pkg_suse_gfio_filename: ${{ steps.build-suse.outputs.FIO_PKG_GFIO_FILENAME }}
       fio_pkg_suse_gfio_artifact_id: ${{ steps.artifact-suse-gfio.outputs.artifact-id }}
     steps:
-      - name: Test using custom composite action
-        uses: ./.github/actions/fio-build.yml
       - name: Download hipFile runtime package artifact
         if: ${{ inputs.ais_hipfile_pkg_filename != '' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v7.0.0
@@ -204,6 +202,9 @@ jobs:
           repository: ROCm/fio
           ref: rildixon/ci-hook-for-hipfile
           path: ${{ github.workspace }}/fio/fio-src
+      - name: Test using custom composite action
+        # Needs to be called after checkout
+        uses: ./.github/actions/fio-build.yml
       - name: Prepare FIO tarball for source package
         working-directory: ${{ github.workspace }}/fio
         run: |
