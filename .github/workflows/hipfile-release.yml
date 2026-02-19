@@ -30,7 +30,7 @@ jobs:
     with:
       platform: suse
   release_FIO:
-    if: ${{ github.event.pull_request.merged == true }}
+    #if: ${{ github.event.pull_request.merged == true }}
     runs-on: [ubuntu-24.04]
     needs: [build_debian_pkg, build_fedora_rpm_pkg, build_suse_rpm_pkg]
     permissions:
