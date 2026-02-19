@@ -147,29 +147,29 @@ jobs:
       run:
         shell: bash
     outputs:
-      fio_pkg_debian_debug_filename: ${{ steps.build-debian.outputs.FIO_PKG_DEBUG_FILENAME }}
+      fio_pkg_debian_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_debug_filename }}
       fio_pkg_debian_debug_artifact_id: ${{ steps.artifact-debian-debug.outputs.artifact-id }}
-      fio_pkg_debian_example_filename: ${{ steps.build-debian.outputs.FIO_PKG_EXAMPLE_FILENAME }}
+      fio_pkg_debian_example_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_example_filename }}
       fio_pkg_debian_example_artifact_id: ${{ steps.artifact-debian-example.outputs.artifact-id }}
-      fio_pkg_debian_filename: ${{ steps.build-debian.outputs.FIO_PKG_FILENAME }}
+      fio_pkg_debian_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_filename }}
       fio_pkg_debian_artifact_id: ${{ steps.artifact-debian-runtime.outputs.artifact-id }}
-      fio_pkg_debian_source_filename: ${{ steps.build-debian.outputs.FIO_PKG_SOURCE_FILENAME }}
+      fio_pkg_debian_source_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_source_filename }}
       fio_pkg_debian_source_artifact_id: ${{ steps.artifact-debian-source.outputs.artifact-id }}
-      fio_pkg_fedora_debug_filename: ${{ steps.build-fedora.outputs.FIO_PKG_DEBUG_FILENAME }}
+      fio_pkg_fedora_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_filename }}
       fio_pkg_fedora_debug_artifact_id: ${{ steps.artifact-fedora-debug.outputs.artifact-id }}
-      fio_pkg_fedora_debug_source_filename: ${{ steps.build-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME }}
+      fio_pkg_fedora_debug_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_source_filename }}
       fio_pkg_fedora_debug_source_artifact_id: ${{ steps.artifact-fedora-debug-source.outputs.artifact-id }}
-      fio_pkg_fedora_hipfile_engine_filename: ${{ steps.build-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME }}
+      fio_pkg_fedora_hipfile_engine_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_hipfile_engine_filename }}
       fio_pkg_fedora_hipfile_engine_artifact_id: ${{ steps.artifact-fedora-hipfile-engine.outputs.artifact-id }}
-      fio_pkg_fedora_filename: ${{ steps.build-fedora.outputs.FIO_PKG_FILENAME }}
+      fio_pkg_fedora_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_filename }}
       fio_pkg_fedora_artifact_id: ${{ steps.artifact-fedora-runtime.outputs.artifact-id }}
-      fio_pkg_fedora_source_filename: ${{ steps.build-fedora.outputs.FIO_PKG_SOURCE_FILENAME }}
+      fio_pkg_fedora_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_source_filename }}
       fio_pkg_fedora_source_artifact_id: ${{ steps.artifact-fedora-source.outputs.artifact-id }}
-      fio_pkg_suse_filename: ${{ steps.build-suse.outputs.FIO_PKG_FILENAME }}
+      fio_pkg_suse_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_filename }}
       fio_pkg_suse_artifact_id: ${{ steps.artifact-suse-runtime.outputs.artifact-id }}
-      fio_pkg_suse_source_filename: ${{ steps.build-suse.outputs.FIO_PKG_SOURCE_FILENAME }}
+      fio_pkg_suse_source_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_source_filename }}
       fio_pkg_suse_source_artifact_id: ${{ steps.artifact-suse-source.outputs.artifact-id }}
-      fio_pkg_suse_gfio_filename: ${{ steps.build-suse.outputs.FIO_PKG_GFIO_FILENAME }}
+      fio_pkg_suse_gfio_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_gfio_filename }}
       fio_pkg_suse_gfio_artifact_id: ${{ steps.artifact-suse-gfio.outputs.artifact-id }}
     steps:
       - name: Download hipFile runtime package artifact
@@ -201,174 +201,23 @@ jobs:
           repository: ROCm/fio
           ref: hipFile
           path: ${{ github.workspace }}/fio/fio-src
-      - name: Prepare FIO tarball for source package
-        working-directory: ${{ github.workspace }}/fio
-        run: |
-          export FIO_VERSION="$(./fio-src/FIO-VERSION-GEN 2>&1 | sed -E 's|.*fio-([0-9.]+).*|\1|')"
-          echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
-          tar -cjf ./fio_${FIO_VERSION}.orig.tar.bz2 \
-            --exclude="debian" \
-            --exclude="docker" \
-            --exclude="rpm" \
-            --exclude-vcs \
-            --transform "s|^fio-src|fio-${FIO_VERSION}|" \
-            fio-src
-      - name: Setup rpmbuild env
-        if: ${{ env.PKG_TYPE == 'RPM' }}
-        working-directory: ${{ github.workspace }}/fio
-        run: |
-          mkdir -p rpmbuild/BUILD rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
-          cp ./fio-src/rpm/${RPM_SPEC_MAINTAINER}/fio.spec ./rpmbuild/SPECS
-          mv ./fio_${FIO_VERSION}.orig.tar.bz2 ./rpmbuild/SOURCES/fio-${FIO_VERSION}.tar.bz2
-      # The build steps on a per distro basis vary.
-      # It may be advantageous to hide this within a bash script.
-      # Each distro also has their own set of build products based on the spec file.
-      # We may want to abstract this to an action.
-      - name: (SUSE-based) Build FIO with hipFile support
-        id: build-suse
-        if: ${{ env.RPM_SPEC_MAINTAINER == 'suse' }}
-        env:
-          _rpm_path: ./RPMS/x86_64
-          _srpm_path: ./SRPMS
-        working-directory: ${{ github.workspace }}/fio/rpmbuild
-        # Referencing github.workspace from the shell within a container
-        # does not work out very well.
-        # Example assuming GitHub hosted CI runner:
-        # github.workspace:    /home/runner/work/fio/fio
-        # Container workspace: /_w/fio/fio
-        # Use `realpath .` to resolve the container path.
-        #
-        # The SUSE RPM macros are an approximation and may not match the
-        # authoritative source in "/usr/lib/build/configs".
-        #
-        # As mentioned in the SUSE spec file, SUSE usually uses OBS to build
-        # packages. However, using that is not really feasible here at this time.
-        run: |
-            IS_OPENSUSE=$(source /etc/os-release; [[ ${ID} == opensuse* ]] && echo 1 || echo 0)
-            SUSE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d", a[1], a[2]}' /etc/os-release)
-            SLE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d00", a[1], a[2]}' /etc/os-release)
-            SUSE_DISTRO="opensuse$(source /etc/os-release && echo "${VERSION_ID//./}")."
-            echo "SUSE_DISTRO=${SUSE_DISTRO}" >> "${GITHUB_ENV}"
-            rpmbuild \
-              -ba \
-              --define="_topdir $(realpath .)" \
-              --define="is_opensuse ${IS_OPENSUSE}" \
-              --define="suse_version ${SUSE_VERSION}" \
-              --define="sle_version ${SLE_VERSION}" \
-              --define="dist ${SUSE_DISTRO}" \
-              --with=libhipfile \
-              ./SPECS/fio.spec
-
-            shopt -s nullglob
-            ls -al ${_rpm_path} ${_srpm_path}
-            FIO_PKG_GFIO_FILENAME="$(basename ${_rpm_path}/gfio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
-            FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
-            FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.src.rpm)"
-
-            echo "FIO_PKG_GFIO_FILENAME=${FIO_PKG_GFIO_FILENAME}" >> "${GITHUB_OUTPUT}"
-            echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
-            echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
-      - name: (SUSE-based) Print package metadata for debugging
-        if: ${{ env.RPM_SPEC_MAINTAINER == 'suse' }}
-        env:
-          _rpm_path: ./RPMS/x86_64
-          _srpm_path: ./SRPMS
-        working-directory: ${{ github.workspace }}/fio/rpmbuild
-        run: |
-          echo "Runtime Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-suse.outputs.FIO_PKG_FILENAME) }}
-          echo -e "\n\nGFIO Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-suse.outputs.FIO_PKG_GFIO_FILENAME) }}
-          echo -e "\n\nSource Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.build-suse.outputs.FIO_PKG_SOURCE_FILENAME) }}
-      - name: (Fedora-based) Build FIO with hipFile support
-        id: build-fedora
-        if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
-        env:
-          _rpm_path: ./RPMS/x86_64
-          _srpm_path: ./SRPMS
-        working-directory: ${{ github.workspace }}/fio/rpmbuild
-        # Referencing github.workspace from the shell within a container
-        # does not work out very well.
-        # Example assuming GitHub hosted CI runner:
-        # github.workspace:    /home/runner/work/fio/fio
-        # Container workspace: /_w/fio/fio
-        # Use `realpath .` to resolve the container path.
-        run: |
-          rpmbuild \
-            -ba \
-            --define="_topdir $(realpath .)" \
-            --with=hipfile \
-            ./SPECS/fio.spec
-
-          shopt -s nullglob
-          ls -al ./RPMS/x86_64 ./SRPMS
-          FIO_PKG_DEBUG_FILENAME="$(basename ${_rpm_path}/fio-debuginfo-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_DEBUG_SOURCE_FILENAME="$(basename ${_rpm_path}/fio-debugsource-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_HIPFILE_ENGINE_FILENAME="$(basename ${_rpm_path}/fio-engine-hipfile-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-[0-9]*.rpm)"
-          FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-[0-9]*.src.rpm)"
-
-          echo "FIO_PKG_DEBUG_FILENAME=${FIO_PKG_DEBUG_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_DEBUG_SOURCE_FILENAME=${FIO_PKG_DEBUG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_HIPFILE_ENGINE_FILENAME=${FIO_PKG_HIPFILE_ENGINE_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
-      - name: (Fedora-based) Print package metadata for debugging
-        if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
-        env:
-          _rpm_path: ./RPMS/x86_64
-          _srpm_path: ./SRPMS
-        working-directory: ${{ github.workspace }}/fio/rpmbuild
-        run: |
-          echo "Runtime Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_FILENAME) }}
-          echo -e "\n\nDebug Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_DEBUG_FILENAME) }}
-          echo -e "\n\nDebug Source Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME) }}
-          echo -e "\n\nhipFile FIO Engine Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.build-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME) }}
-          echo -e "\n\nSource Package:"
-          ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.build-fedora.outputs.FIO_PKG_SOURCE_FILENAME) }}
-      - name: (Debian-based) Build FIO with hipFile support
-        id: build-debian
-        if: ${{ env.PKG_TYPE == 'DEB' }}
-        working-directory: ${{ github.workspace }}/fio/fio-src
-        run: |
-          dpkg-buildpackage --sanitize-env --build=full -uc
-
-          shopt -s nullglob
-          cd .. && ls -al
-          FIO_PKG_DEBUG_FILENAME="$(echo fio-dbgsym_[0-9]*.ddeb)"
-          FIO_PKG_EXAMPLE_FILENAME="$(echo fio-examples_[0-9]*.deb)"
-          FIO_PKG_FILENAME="$(echo fio_[0-9]*.deb)"
-          FIO_PKG_SOURCE_FILENAME="$(echo fio_[0-9]*.debian.tar.xz)"
-
-          echo "FIO_PKG_DEBUG_FILENAME=${FIO_PKG_DEBUG_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_EXAMPLE_FILENAME=${FIO_PKG_EXAMPLE_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
-          echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
-      - name: (Debian-based) Print package metadata for debugging
-        if: ${{ env.PKG_TYPE == 'DEB' }}
-        working-directory: ${{ github.workspace }}/fio
-        run: |
-          echo "Runtime Package:"
-          ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.build-debian.outputs.FIO_PKG_FILENAME) }}
-          echo -e "\n\nDebug Package:"
-          ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.build-debian.outputs.FIO_PKG_DEBUG_FILENAME) }}
-          echo -e "\n\nExample Package:"
-          ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.build-debian.outputs.FIO_PKG_EXAMPLE_FILENAME) }}
-          echo -e "\n\nSource Package:"
-          ${{ format('tar --list -f {0}', steps.build-debian.outputs.FIO_PKG_SOURCE_FILENAME) }}
+      - name: Build FIO Packages
+        id: build-fio
+        # Needs to be called after checkout
+        uses: ./fio/fio-src/.github/actions/build-fio
+        with:
+          fio_workspace: ${{ github.workspace }}/fio
+          platform: ${{ inputs.platform }}
+          pkg_type: ${{ env.PKG_TYPE }}
+          rpm_spec_maintainer: ${{ env.RPM_SPEC_MAINTAINER }}
       # We should abstract the upload step to an action. This is not going to look pretty.
       - name: (SUSE-based) Upload FIO Runtime Package as an Artifact
         id: artifact-suse-runtime
         if: ${{ env.RPM_SPEC_MAINTAINER == 'suse' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-suse.outputs.FIO_PKG_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-suse.outputs.FIO_PKG_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_suse_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_suse_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -377,8 +226,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'suse' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-suse.outputs.FIO_PKG_GFIO_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-suse.outputs.FIO_PKG_GFIO_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_suse_gfio_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_suse_gfio_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -387,8 +236,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'suse' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-suse.outputs.FIO_PKG_SOURCE_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/SRPMS/{1}', github.workspace, steps.build-suse.outputs.FIO_PKG_SOURCE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_suse_source_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/SRPMS/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_suse_source_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -397,8 +246,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-fedora.outputs.FIO_PKG_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fedora.outputs.FIO_PKG_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_fedora_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_fedora_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -407,8 +256,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-fedora.outputs.FIO_PKG_DEBUG_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fedora.outputs.FIO_PKG_DEBUG_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_fedora_debug_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -417,8 +266,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_source_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_fedora_debug_source_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -427,8 +276,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_fedora_hipfile_engine_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/RPMS/x86_64/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_fedora_hipfile_engine_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -437,8 +286,8 @@ jobs:
         if: ${{ env.RPM_SPEC_MAINTAINER == 'fedora' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-fedora.outputs.FIO_PKG_SOURCE_FILENAME }}
-          path: ${{ format('{0}/fio/rpmbuild/SRPMS/{1}', github.workspace, steps.build-fedora.outputs.FIO_PKG_SOURCE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_fedora_source_filename }}
+          path: ${{ format('{0}/fio/rpmbuild/SRPMS/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_fedora_source_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -447,8 +296,8 @@ jobs:
         if: ${{ env.PKG_TYPE == 'DEB' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-debian.outputs.FIO_PKG_FILENAME }}
-          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-debian.outputs.FIO_PKG_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_debian_filename }}
+          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_debian_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -457,8 +306,8 @@ jobs:
         if: ${{ env.PKG_TYPE == 'DEB' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-debian.outputs.FIO_PKG_DEBUG_FILENAME }}
-          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-debian.outputs.FIO_PKG_DEBUG_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_debian_debug_filename }}
+          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_debian_debug_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -467,8 +316,8 @@ jobs:
         if: ${{ env.PKG_TYPE == 'DEB' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-debian.outputs.FIO_PKG_EXAMPLE_FILENAME }}
-          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-debian.outputs.FIO_PKG_EXAMPLE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_debian_example_filename }}
+          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_debian_example_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -477,8 +326,8 @@ jobs:
         if: ${{ env.PKG_TYPE == 'DEB' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
         with:
-          name: ${{ steps.build-debian.outputs.FIO_PKG_SOURCE_FILENAME }}
-          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-debian.outputs.FIO_PKG_SOURCE_FILENAME) }}
+          name: ${{ steps.build-fio.outputs.fio_pkg_debian_source_filename }}
+          path: ${{ format('{0}/fio/{1}', github.workspace, steps.build-fio.outputs.fio_pkg_debian_source_filename) }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
