@@ -25,22 +25,22 @@ on:
       # Note: Only outputs matching inputs.platform will be set.
       fio_pkg_debian_filename:
         description: "FIO runtime package for Debian & downstream distros."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_filename }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_debian_filename }}
       fio_pkg_debian_artifact_id:
         description: "GHA Artifact ID for the Debian FIO package."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_artifact_id }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_debian_artifact_id }}
       fio_pkg_fedora_filename:
         description: "FIO runtime package for Fedora & downstream distros."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_filename }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_fedora_filename }}
       fio_pkg_fedora_artifact_id:
         description: "GHA Artifact ID for the Fedora FIO package."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_artifact_id }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_fedora_artifact_id }}
       fio_pkg_suse_filename:
         description: "FIO runtime package for SUSE distros."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_filename }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_suse_filename }}
       fio_pkg_suse_artifact_id:
         description: "GHA Artifact ID for the SUSE FIO package."
-        value: ${{ jobs.build_FIO_suse.outputs.fio_pkg_artifact_id }}
+        value: ${{ jobs.build_FIO_all.outputs.fio_pkg_suse_artifact_id }}
 permissions:
   contents: read
   packages: read
