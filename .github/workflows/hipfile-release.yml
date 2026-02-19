@@ -50,14 +50,14 @@ jobs:
                 needs.build_debian_pkg.outputs.fio_pkg_debian_example_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_debian_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_debian_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_fedora_debug_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_fedora_debug_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_fedora_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_fedora_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_source_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_gfio_artifact_id
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_source_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_source_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_source_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_gfio_artifact_id
               )
             }}
       - name: List Releases
@@ -105,11 +105,11 @@ jobs:
             ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_example_filename }} \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_filename }} \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_fedora_debug_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_fedora_debug_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_fedora_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_fedora_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_source_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_suse_gfio_filename }}
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_source_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_source_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_source_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_gfio_filename }}
