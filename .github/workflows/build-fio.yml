@@ -179,7 +179,7 @@ jobs:
           name: ${{ inputs.ais_hipfile_pkg_filename }}
       - name: Download nightly hipFile runtime package
         if: ${{ inputs.ais_hipfile_pkg_filename == '' }}
-        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_PKG_NAME}
+        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_PKG_NAME} -o ${DEFAULT_HIPFILE_PKG_NAME}
       - name: Download hipFile development package artifact
         if: ${{ inputs.ais_hipfile_pkg_filename != '' && inputs.ais_hipfile_pkg_dev_filename != '' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v7.0.0
@@ -187,7 +187,7 @@ jobs:
           name: ${{ inputs.ais_hipfile_pkg_dev_filename }}
       - name: Download nightly hipFile development package
         if: ${{ inputs.ais_hipfile_pkg_dev_filename == '' && inputs.ais_hipfile_pkg_filename == '' }}
-        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_DEV_PKG_NAME}
+        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_DEV_PKG_NAME} -o ${DEFAULT_HIPFILE_DEV_PKG_NAME}
       - name: Install hipFile packages
         run: |
           ${PKG_INSTALL_CMD} \
