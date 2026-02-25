@@ -199,7 +199,13 @@ jobs:
           # Need to specify, otherwise uses the wrong ref if calling this workflow
           # from another repo.
           repository: ROCm/fio
-          ref: hipFile
+          ref: >-
+            ${{
+              case(
+                github.repository == 'ROCm/fio', github.ref,
+                'hipFile'
+              )
+            }}
           path: ${{ github.workspace }}/fio/fio-src
       - name: Build FIO Packages
         id: build-fio
