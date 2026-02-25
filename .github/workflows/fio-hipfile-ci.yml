@@ -1,0 +1,22 @@
+name: FIO-hipFile-CI
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  packages: read
+jobs:
+  FIO_hipFile_CI:
+    strategy:
+      fail-fast: false
+      matrix:
+        supported_platforms:
+          - rocky
+          - suse
+          - ubuntu
+    uses: ./.github/workflows/build-fio.yml
+    with:
+      platform: ${{ matrix.supported_platforms }}
