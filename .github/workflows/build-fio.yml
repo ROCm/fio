@@ -203,7 +203,7 @@ jobs:
             ${{
               case(
                 github.repository == 'ROCm/fio', github.ref,
-                'hipFile'
+                'rildixon/ci-hook-for-hipfile'
               )
             }}
           path: ${{ github.workspace }}/fio/fio-src
