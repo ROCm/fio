@@ -108,6 +108,7 @@ jobs:
           echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
           tar -cjf ./fio_${FIO_VERSION}.orig.tar.bz2 \
             --exclude="debian" \
+            --exclude="rpm" \
             --exclude-vcs \
             --transform "s|^fio-src|fio-${FIO_VERSION}|" \
             ./fio-src

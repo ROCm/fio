@@ -13,10 +13,12 @@ permissions:
 jobs:
   build_debian_pkg:
     uses: ./.github/workflows/build-debian.yml
+  build_rpm_pkg:
+    uses: ./.github/workflows/build-rpm.yml
   release_FIO_with_hipFile:
     if: ${{ github.event.pull_request.merged == true }}
     runs-on: [ubuntu-24.04]
-    needs: [build_debian_pkg]
+    needs: [build_debian_pkg, build_rpm_pkg]
     permissions:
       contents: write
     steps:
@@ -29,11 +31,16 @@ jobs:
           artifact-ids: >-
             ${{
               format(
-                '{0},{1},{2},{3}',
+                '{0},{1},{2},{3},{4},{5},{6},{7},{8}',
                 needs.build_debian_pkg.outputs.fio_pkg_debug_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_example_artifact_id,
                 needs.build_debian_pkg.outputs.fio_pkg_artifact_id,
-                needs.build_debian_pkg.outputs.fio_pkg_source_artifact_id
+                needs.build_debian_pkg.outputs.fio_pkg_source_artifact_id,
+                needs.build_rpm_pkg.outputs.fio_pkg_debug_artifact_id,
+                needs.build_rpm_pkg.outputs.fio_pkg_debug_source_artifact_id,
+                needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_artifact_id,
+                needs.build_rpm_pkg.outputs.fio_pkg_source_artifact_id,
+                needs.build_rpm_pkg.outputs.fio_pkg_artifact_id
               )
             }}
       - name: List Releases
@@ -59,7 +66,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb}
+          echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb,debian.tar.xz}
+          echo fio{,-engine-hipfile}{,-debuginfo,-debugsource}-[0-9]*.rpm
           gh release create \
             --notes "
               Latest Build as of: $(date)
@@ -81,4 +89,9 @@ jobs:
             ${{ needs.build_debian_pkg.outputs.fio_pkg_debug_filename }} \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_example_filename }} \
             ${{ needs.build_debian_pkg.outputs.fio_pkg_filename }} \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_source_filename }}
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_source_filename }} \
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_debug_filename }} \
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_debug_source_filename }} \
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_filename }} \
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_source_filename }} \
+            ${{ needs.build_rpm_pkg.outputs.fio_pkg_filename }}
