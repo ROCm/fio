@@ -24,13 +24,12 @@ on:
         value: ${{ jobs.build.outputs.fio_pkg_source_artifact_id }}
 permissions:
   contents: read
+  packages: read
 jobs:
   build:
     runs-on: [ubuntu-24.04]
     container:
-      image: opensuse/leap:15.6
-      env:
-        ROCM_VERSION: 7.2.0
+      image: ghcr.io/rocm/fio/fio_build_suse:latest
     defaults:
       run:
         shell: bash
@@ -42,45 +41,6 @@ jobs:
       fio_pkg_source_filename: ${{ steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME }}
       fio_pkg_source_artifact_id: ${{ steps.artifact-source.outputs.artifact-id }}
     steps:
-      - name: Setup ROCm Repo
-        run: |
-          export ROCM_PKG_REPO_VERSION="$(echo ${ROCM_PKG_REPO_OVERRIDE:-$ROCM_VERSION} | sed -E 's|([^.]+\.[^.]+)\.0$|\1|')"
-          cat <<EOF > /etc/zypp/repos.d/rocm.repo
-          [ROCm-${ROCM_VERSION}]
-          name=ROCm${ROCM_VERSION}
-          baseurl=https://repo.radeon.com/rocm/zyp/${ROCM_PKG_REPO_VERSION}/main
-          enabled=1
-          priority=50
-          gpgcheck=1
-          gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key
-          EOF
-          zypper --gpg-auto-import-keys refresh
-          cat <<EOF > /etc/ld.so.conf.d/rocm.conf
-          /opt/rocm/lib
-          /opt/rocm/lib64
-          EOF
-          ldconfig
-      - name: Install FIO development dependencies
-        run: |
-          zypper install -y \
-            cunit-devel \
-            gtk2-devel \
-            libaio-devel \
-            libcurl-devel \
-            libiscsi-devel \
-            libnbd-devel \
-            libnuma-devel \
-            libpmem-devel \
-            librbd-devel \
-            librdmacm-devel \
-            openssl-devel \
-            zlib-devel \
-            rpm-build
-      - name: Install hipFile development dependencies
-        run: |
-          zypper install -y \
-            hip-devel \
-            libmount-devel
       - name: Install latest hipFile dev package
         run: |
           curl -L https://github.com/ROCm/hipFile/releases/download/nightly/hipfile-0.2.0.70200-nightly.opensuse156.9999.x86_64.rpm -o hipfile.rpm
@@ -103,6 +63,7 @@ jobs:
           echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
           tar -cjf ./rpmbuild/SOURCES/fio-${FIO_VERSION}.tar.bz2 \
             --exclude="debian" \
+            --exclude="docker" \
             --exclude="rpm" \
             --exclude-vcs \
             --transform="s|^fio-src|fio-${FIO_VERSION}|" \

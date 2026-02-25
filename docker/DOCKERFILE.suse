@@ -1,0 +1,55 @@
+ARG SUSE_MAJOR_VERSION=15
+ARG SUSE_MINOR_VERSION=6
+FROM opensuse/leap:${SUSE_MAJOR_VERSION}.${SUSE_MINOR_VERSION}
+LABEL org.opencontainers.image.source=https://github.com/ROCm/fio
+ARG SUSE_MAJOR_VERSION
+ARG SUSE_MINOR_VERSION
+ARG ROCM_VERSION=7.2.0
+
+# If the target ROCm Version on the package repository is non-standard, you can forcibly
+# set the ROCm version used in the package repo URL.
+# Ex. Package 7.0_alpha installs 7.0.0
+ARG ROCM_PKG_REPO_OVERRIDE
+
+# The initial pull takes some time. Expect ~2.5 minutes to complete.
+RUN zypper refresh
+
+RUN ROCM_PKG_REPO_VERSION="$(echo ${ROCM_PKG_REPO_OVERRIDE:-$ROCM_VERSION} | sed -E 's|([^.]+\.[^.]+)\.0$|\1|')"; \
+    cat <<EOF > /etc/zypp/repos.d/rocm.repo
+[ROCm-${ROCM_VERSION}]
+name=ROCm${ROCM_VERSION}
+baseurl=https://repo.radeon.com/rocm/zyp/${ROCM_PKG_REPO_VERSION}/main
+enabled=1
+priority=50
+gpgcheck=1
+gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key
+EOF
+
+# Configure system linker for ROCm
+RUN cat <<EOF > /etc/ld.so.conf.d/rocm.conf
+/opt/rocm/lib
+/opt/rocm/lib64
+EOF
+RUN ldconfig
+
+RUN zypper --gpg-auto-import-keys refresh && \
+    zypper install -y \
+        cunit-devel \
+        git \
+        gtk2-devel \
+        hip-devel \
+        libaio-devel \
+        libcurl-devel \
+        libiscsi-devel \
+        libmount-devel \
+        libnbd-devel \
+        libnuma-devel \
+        libpmem-devel \
+        librbd-devel \
+        librdmacm-devel \
+        openssl-devel \
+        rpm-build \
+        zlib-devel
+
+# Add ROCm and CUDA bin directories to the path
+ENV PATH=/usr/local/cuda/bin:/opt/rocm/bin:${PATH}

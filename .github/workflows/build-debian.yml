@@ -29,13 +29,12 @@ on:
         value: ${{ jobs.build.outputs.fio_pkg_source_artifact_id }}
 permissions:
   contents: read
+  packages: read
 jobs:
   build:
     runs-on: [ubuntu-24.04]
     container:
-      image: ubuntu:noble
-      env:
-        ROCM_VERSION: 7.2.0
+      image: ghcr.io/rocm/fio/fio_build_ubuntu:latest
     defaults:
       run:
         shell: bash
@@ -49,49 +48,6 @@ jobs:
       fio_pkg_source_filename: ${{ steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME }}
       fio_pkg_source_artifact_id: ${{ steps.artifact-source.outputs.artifact-id }}
     steps:
-      - name: Setup ROCm Repo
-        run: |
-          apt update
-          apt install -y curl gpg gh git
-          curl https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg
-          export ROCM_PKG_REPO_VERSION="$(echo ${ROCM_PKG_REPO_OVERRIDE:-$ROCM_VERSION} | sed -E 's|([^.]+\.[^.]+)\.0$|\1|')"
-          cat <<EOF > /etc/apt/sources.list.d/rocm.list
-          deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_PKG_REPO_VERSION} noble main
-          EOF
-          cat <<EOF > /etc/ld.so.conf.d/rocm.conf
-          /opt/rocm/lib
-          /opt/rocm/lib64
-          EOF
-          ldconfig
-      - name: Install FIO development dependencies
-        run: |
-          apt update
-          apt install -y \
-            debhelper \
-            libaio-dev \
-            zlib1g-dev \
-            librdmacm-dev \
-            libibverbs-dev \
-            librbd-dev \
-            libcairo2-dev \
-            libnuma-dev \
-            flex \
-            bison \
-            sphinx \
-            python3-sphinx \
-            libglusterfs-dev \
-            libpmem-dev \
-            libnbd-dev \
-            libnfs-dev \
-            libgnutls28-dev
-      - name: Install hipfile dev pkg deps
-        run: |
-          apt update
-          apt install -y \
-            clang \
-            dpkg-dev \
-            hip-dev \
-            libmount-dev
       - name: Install latest hipFile dev package
         run: |
           curl -L https://github.com/ROCm/hipFile/releases/download/nightly/hipfile_0.2.0.70200-nightly.9999.24.04_amd64.deb -o hipfile.deb
@@ -113,6 +69,7 @@ jobs:
           echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
           tar -cjf ./fio_${FIO_VERSION}.orig.tar.bz2 \
             --exclude="debian" \
+            --exclude="docker" \
             --exclude="rpm" \
             --exclude-vcs \
             --transform "s|^fio-src|fio-${FIO_VERSION}|" \

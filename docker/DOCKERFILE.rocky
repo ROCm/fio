@@ -1,0 +1,64 @@
+ARG ROCKY_MAJOR_VERSION=9
+ARG ROCKY_VERSION=${ROCKY_MAJOR_VERSION}.6
+FROM rockylinux/rockylinux:${ROCKY_VERSION}-minimal
+LABEL org.opencontainers.image.source=https://github.com/ROCm/fio
+# Brings ROCKY_VERSION in-scope
+ARG ROCKY_MAJOR_VERSION
+ARG ROCKY_VERSION
+ARG ROCM_VERSION=7.2.0
+
+# If the target ROCm Version on the package repository is non-standard, you can forcibly
+# set the ROCm version used in the package repo URL.
+# Ex. Package 7.0_alpha installs 7.0.0
+ARG ROCM_PKG_REPO_OVERRIDE
+
+# Update repo and install program dependencies.
+# microdnf is too stripped down, install full dnf.
+RUN microdnf install -y \
+        dnf \
+        epel-release && \
+    dnf config-manager --set-enabled crb
+
+RUN ROCM_PKG_REPO_VERSION="$(echo ${ROCM_PKG_REPO_OVERRIDE:-$ROCM_VERSION} | sed -E 's|([^.]+\.[^.]+)\.0$|\1|')"; \
+    cat <<EOF > /etc/yum.repos.d/rocm.repo
+[ROCm-${ROCM_VERSION}]
+name=ROCm${ROCM_VERSION}
+baseurl=https://repo.radeon.com/rocm/el${ROCKY_MAJOR_VERSION}/${ROCM_PKG_REPO_VERSION}/main
+enabled=1
+priority=50
+gpgcheck=1
+gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key
+EOF
+
+# Configure system linker for ROCm
+RUN cat <<EOF > /etc/ld.so.conf.d/rocm.conf
+/opt/rocm/lib
+/opt/rocm/lib64
+EOF
+RUN ldconfig
+
+# Install FIO build deps & hipFile runtime & devel deps
+RUN dnf makecache && \
+    dnf install -y \
+        gcc \
+        hip-devel \
+        libaio-devel \
+        libcurl-devel \
+        libmount-devel \
+        libnbd-devel \
+        libnl3-devel \
+        libpmem-devel \
+        librbd-devel \
+        librdmacm-devel \
+        make \
+        numactl-devel \
+        openssl-devel \
+        python3-devel \
+        rpm-build \
+        zlib-devel
+
+# Add ROCm bin directories to the path
+ENV PATH=/opt/rocm/bin:${PATH}
+
+# Environment Build Arg for ROCm
+ENV ROCM_VERSION="${ROCM_VERSION}"

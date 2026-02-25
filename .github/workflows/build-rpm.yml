@@ -36,13 +36,13 @@ on:
         value: ${{ jobs.build.outputs.fio_pkg_source_artifact_id }}
 permissions:
   contents: read
+  packages: read
 jobs:
   build:
     runs-on: [ubuntu-24.04]
     container:
-      image: rockylinux/rockylinux:9.6
+      image: ghcr.io/rocm/fio/fio_build_rocky:latest
       env:
-        ROCM_VERSION: 7.2.0
         RHEL_MAJOR_VERSION: 9
     defaults:
       run:
@@ -59,52 +59,6 @@ jobs:
       fio_pkg_source_filename: ${{ steps.pkg-metadata.outputs.FIO_PKG_SOURCE_FILENAME }}
       fio_pkg_source_artifact_id: ${{ steps.artifact-source.outputs.artifact-id }}
     steps:
-      - name: Setup GitHub CLI
-        run: |
-          dnf install -y epel-release
-          dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-          dnf config-manager --set-enabled crb
-          dnf install -y gh
-      - name: Setup ROCm Repo
-        run: |
-          export ROCM_PKG_REPO_VERSION="$(echo ${ROCM_PKG_REPO_OVERRIDE:-$ROCM_VERSION} | sed -E 's|([^.]+\.[^.]+)\.0$|\1|')"
-          export RHEL_MAJOR_VERSION="$(source /etc/os-release && echo ${VERSION_ID%%.*})"
-          cat <<EOF > /etc/yum.repos.d/rocm.repo
-          [ROCm-${ROCM_VERSION}]
-          name=ROCm${ROCM_VERSION}
-          baseurl=https://repo.radeon.com/rocm/el${RHEL_MAJOR_VERSION}/${ROCM_PKG_REPO_VERSION}/main
-          enabled=1
-          priority=50
-          gpgcheck=1
-          gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key
-          EOF
-          cat <<EOF > /etc/ld.so.conf.d/rocm.conf
-          /opt/rocm/lib
-          /opt/rocm/lib64
-          EOF
-          ldconfig
-      - name: Install FIO development dependencies
-        run: |
-          dnf install -y \
-            gcc \
-            libaio-devel \
-            libcurl-devel \
-            libnbd-devel \
-            libnl3-devel \
-            libpmem-devel \
-            librbd-devel \
-            librdmacm-devel \
-            make \
-            numactl-devel \
-            openssl-devel \
-            python3-devel \
-            rpm-build \
-            zlib-devel
-      - name: Install hipFile development dependencies
-        run: |
-          dnf install -y \
-            hip-devel \
-            libmount-devel
       - name: Install latest hipFile dev package
         run: |
           curl -L https://github.com/ROCm/hipFile/releases/download/nightly/hipfile-0.2.0.70200-nightly.9999.el9.x86_64.rpm -o hipfile.rpm
@@ -127,6 +81,7 @@ jobs:
           echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
           tar -cjf ./rpmbuild/SOURCES/fio-${FIO_VERSION}.tar.bz2 \
             --exclude="debian" \
+            --exclude="docker" \
             --exclude="rpm" \
             --exclude-vcs \
             --transform="s|^fio-src|fio-${FIO_VERSION}|" \
