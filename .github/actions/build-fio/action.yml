@@ -212,7 +212,7 @@ runs:
         ls -al ./RPMS/x86_64 ./SRPMS
         FIO_PKG_DEBUG_FILENAME="$(basename ${_rpm_path}/fio-debuginfo-${FIO_VERSION}-[0-9]*.rpm)"
         FIO_PKG_DEBUG_SOURCE_FILENAME="$(basename ${_rpm_path}/fio-debugsource-${FIO_VERSION}-[0-9]*.rpm)"
-        FIO_PKG_HIPFILE_ENGINE_FILENAME="$(basename ${_rpm_path}/fio-engine-hipfile-${FIO_VERSION}-[0-9]*.rpm)"
+        FIO_PKG_HIPFILE_ENGINE_FILENAME="$(basename ${_rpm_path}/fio-engine-libhipfile-${FIO_VERSION}-[0-9]*.rpm)"
         FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-[0-9]*.rpm)"
         FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-[0-9]*.src.rpm)"
 
