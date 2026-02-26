@@ -102,11 +102,13 @@ runs:
           fio-src
     - name: Setup rpmbuild env
       if: ${{ inputs.pkg_type == 'RPM' }}
+      env:
+        _INPUT_RPM_SPEC_MAINTAINER: ${{ inputs.rpm_spec_maintainer }}
       shell: bash
       working-directory: ${{ inputs.fio_workspace }}
       run: |
         mkdir -p rpmbuild/BUILD rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
-        cp ./fio-src/rpm/${RPM_SPEC_MAINTAINER}/fio.spec ./rpmbuild/SPECS
+        cp ./fio-src/rpm/${_INPUT_RPM_SPEC_MAINTAINER}/fio.spec ./rpmbuild/SPECS
         mv ./fio_${FIO_VERSION}.orig.tar.bz2 ./rpmbuild/SOURCES/fio-${FIO_VERSION}.tar.bz2
     # The build steps on a per distro basis vary.
     # It may be advantageous to hide this within a bash script.

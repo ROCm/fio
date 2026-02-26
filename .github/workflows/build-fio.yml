@@ -223,7 +223,7 @@ jobs:
           fio_workspace: ${{ github.workspace }}/fio
           platform: ${{ inputs.platform }}
           pkg_type: ${{ env.PKG_TYPE }}
-          rpm_spec_maintainer: ${{ env.RPM_SPEC_MAINTAINER}}
+          rpm_spec_maintainer: ${{ env.RPM_SPEC_MAINTAINER }}
           fio_pkg_debian_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_filename }}
           fio_pkg_debian_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_debug_filename }}
           fio_pkg_debian_example_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_example_filename }}
