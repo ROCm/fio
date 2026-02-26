@@ -1,0 +1,280 @@
+name: build_FIO
+description: |
+  Builds FIO on the target Linux OS platform.
+  Having these steps within a composite action allows us to hide
+  numerous skipped steps that are OS specific.
+inputs:
+  fio_workspace:
+    description: Path to the FIO workspace.
+    required: true
+    type: string
+  platform:
+    required: true
+    type: string
+  pkg_type:
+    description: |
+      'RPM' or 'DEB' package to build.
+      Explicitly provided instead of assuming this variable name
+      exists as an environment variable.
+    required: true
+    type: string
+  rpm_spec_maintainer:
+    description: |
+      Use the RPM spec file maintained by this distro. Has no effect
+      on Debian based builds.
+      Accepts: 'fedora' or 'suse'.
+
+      Explicitly provided instead of assuming this variable name
+      exists as an environment variable.
+    required: false
+    type: string
+outputs:
+  # Note: Only outputs matching inputs.platform will be set.
+  # Debian Outputs
+  fio_pkg_debian_filename:
+    description: "FIO runtime package for Debian & downstream distros."
+    value: ${{ steps.metadata-debian.outputs.FIO_PKG_FILENAME }}
+  fio_pkg_debian_debug_filename:
+    description: "FIO debug package for Debian & downstream distros."
+    value: ${{ steps.metadata-debian.outputs.FIO_PKG_DEBUG_FILENAME }}
+  fio_pkg_debian_example_filename:
+    description: "FIO example package for Debian & downstream distros."
+    value: ${{ steps.metadata-debian.outputs.FIO_PKG_EXAMPLE_FILENAME }}
+  fio_pkg_debian_source_filename:
+    description: "FIO source package for Debian & downstream distros."
+    value: ${{ steps.metadata-debian.outputs.FIO_PKG_SOURCE_FILENAME }}
+
+  # Fedora Outputs
+  fio_pkg_fedora_filename:
+    description: "FIO runtime package for Fedora & downstream distros."
+    value: ${{ steps.metadata-fedora.outputs.FIO_PKG_FILENAME }}
+  fio_pkg_fedora_debug_filename:
+    description: "FIO debug package for Fedora & downstream distros."
+    value: ${{ steps.metadata-fedora.outputs.FIO_PKG_DEBUG_FILENAME }}
+  fio_pkg_fedora_debug_source_filename:
+    description: "FIO debug source package for Fedora & downstream distros."
+    value: ${{ steps.metadata-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME }}
+  fio_pkg_fedora_hipfile_engine_filename:
+    description: "FIO hipFile engine package for Fedora & downstream distros."
+    value: ${{ steps.metadata-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME }}
+  fio_pkg_fedora_source_filename:
+    description: "FIO source package for Fedora & downstream distros."
+    value: ${{ steps.metadata-fedora.outputs.FIO_PKG_SOURCE_FILENAME }}
+
+  # SUSE Outputs
+  fio_pkg_suse_filename:
+    description: "FIO runtime package for SUSE distros."
+    value: ${{ steps.metadata-suse.outputs.FIO_PKG_FILENAME }}
+  fio_pkg_suse_gfio_filename:
+    description: "GFIO package for SUSE distros."
+    value: ${{ steps.metadata-suse.outputs.FIO_PKG_GFIO_FILENAME }}
+  fio_pkg_suse_source_filename:
+    description: "FIO source package for SUSE distros."
+    value: ${{ steps.metadata-suse.outputs.FIO_PKG_SOURCE_FILENAME }}
+runs:
+  using: "composite"
+  steps:
+    - name: Check that 'rpm_spec_maintainer' is valid if pkg_type is 'RPM'.
+      if: ${{ inputs.pkg_type == 'RPM' }}
+      env:
+        _INPUT_RPM_SPEC_MAINTAINER: ${{ inputs.rpm_spec_maintainer }}
+      shell: bash
+      run: |
+        if [[ \
+          "${_INPUT_RPM_SPEC_MAINTAINER}" != 'fedora' && \
+          "${_INPUT_RPM_SPEC_MAINTAINER}" != 'suse' \
+        ]]; then
+          echo "ERROR: rpm_spec_maintainer must be 'fedora' or 'suse' when pkg_type is 'RPM'."
+          exit 1
+        fi
+    - name: Prepare FIO tarball for source package
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}
+      run: |
+        export FIO_VERSION="$(./fio-src/FIO-VERSION-GEN 2>&1 | sed -E 's|.*fio-([0-9.]+).*|\1|')"
+        echo "FIO_VERSION=${FIO_VERSION}" >> "${GITHUB_ENV}"
+        tar -cjf ./fio_${FIO_VERSION}.orig.tar.bz2 \
+          --exclude="debian" \
+          --exclude="docker" \
+          --exclude="rpm" \
+          --exclude-vcs \
+          --transform "s|^fio-src|fio-${FIO_VERSION}|" \
+          fio-src
+    - name: Setup rpmbuild env
+      if: ${{ inputs.pkg_type == 'RPM' }}
+      env:
+        _INPUT_RPM_SPEC_MAINTAINER: ${{ inputs.rpm_spec_maintainer }}
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}
+      run: |
+        mkdir -p rpmbuild/BUILD rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
+        cp ./fio-src/rpm/${_INPUT_RPM_SPEC_MAINTAINER}/fio.spec ./rpmbuild/SPECS
+        mv ./fio_${FIO_VERSION}.orig.tar.bz2 ./rpmbuild/SOURCES/fio-${FIO_VERSION}.tar.bz2
+    # The build steps on a per distro basis vary.
+    # It may be advantageous to hide this within a bash script.
+    # Each distro also has their own set of build products based on the spec file.
+    # We may want to abstract this to an action.
+    - name: (SUSE-based) Build FIO with hipFile support
+      id: build-suse
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      # Referencing github.workspace from the shell within a container
+      # does not work out very well.
+      # Example assuming GitHub hosted CI runner:
+      # github.workspace:    /home/runner/work/fio/fio
+      # Container workspace: /_w/fio/fio
+      # Use `realpath .` to resolve the container path.
+      #
+      # The SUSE RPM macros are an approximation and may not match the
+      # authoritative source in "/usr/lib/build/configs".
+      #
+      # As mentioned in the SUSE spec file, SUSE usually uses OBS to build
+      # packages. However, using that is not really feasible here at this time.
+      run: |
+        IS_OPENSUSE=$(source /etc/os-release; [[ ${ID} == opensuse* ]] && echo 1 || echo 0)
+        SUSE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d", a[1], a[2]}' /etc/os-release)
+        SLE_VERSION=$(awk -F= '/^VERSION_ID=/{gsub(/"/,""); split($2,a,"."); printf "%d%02d00", a[1], a[2]}' /etc/os-release)
+        SUSE_DISTRO="opensuse$(source /etc/os-release && echo "${VERSION_ID//./}")."
+        echo "SUSE_DISTRO=${SUSE_DISTRO}" >> "${GITHUB_ENV}"
+        rpmbuild \
+          -ba \
+          --define="_topdir $(realpath .)" \
+          --define="is_opensuse ${IS_OPENSUSE}" \
+          --define="suse_version ${SUSE_VERSION}" \
+          --define="sle_version ${SLE_VERSION}" \
+          --define="dist ${SUSE_DISTRO}" \
+          --with=libhipfile \
+          ./SPECS/fio.spec
+    - name: (SUSE-based) Capture package metadata
+      id: metadata-suse
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      run: |
+        shopt -s nullglob
+        ls -al ${_rpm_path} ${_srpm_path}
+        FIO_PKG_GFIO_FILENAME="$(basename ${_rpm_path}/gfio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
+        FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.rpm)"
+        FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-${SUSE_DISTRO}[0-9]*.src.rpm)"
+
+        echo "FIO_PKG_GFIO_FILENAME=${FIO_PKG_GFIO_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
+    - name: (SUSE-based) Print package metadata for debugging
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      run: |
+        echo "Runtime Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-suse.outputs.FIO_PKG_FILENAME) }}
+        echo -e "\n\nGFIO Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-suse.outputs.FIO_PKG_GFIO_FILENAME) }}
+        echo -e "\n\nSource Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.metadata-suse.outputs.FIO_PKG_SOURCE_FILENAME) }}
+    - name: (Fedora-based) Build FIO with hipFile support
+      id: build-fedora
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      # Referencing github.workspace from the shell within a container
+      # does not work out very well.
+      # Example assuming GitHub hosted CI runner:
+      # github.workspace:    /home/runner/work/fio/fio
+      # Container workspace: /_w/fio/fio
+      # Use `realpath .` to resolve the container path.
+      run: |
+        rpmbuild \
+          -ba \
+          --define="_topdir $(realpath .)" \
+          --with=hipfile \
+          ./SPECS/fio.spec
+    - name: (Fedora-based) Capture package metadata
+      id: metadata-fedora
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      run: |
+        shopt -s nullglob
+        ls -al ./RPMS/x86_64 ./SRPMS
+        FIO_PKG_DEBUG_FILENAME="$(basename ${_rpm_path}/fio-debuginfo-${FIO_VERSION}-[0-9]*.rpm)"
+        FIO_PKG_DEBUG_SOURCE_FILENAME="$(basename ${_rpm_path}/fio-debugsource-${FIO_VERSION}-[0-9]*.rpm)"
+        FIO_PKG_HIPFILE_ENGINE_FILENAME="$(basename ${_rpm_path}/fio-engine-libhipfile-${FIO_VERSION}-[0-9]*.rpm)"
+        FIO_PKG_FILENAME="$(basename ${_rpm_path}/fio-${FIO_VERSION}-[0-9]*.rpm)"
+        FIO_PKG_SOURCE_FILENAME="$(basename ${_srpm_path}/fio-${FIO_VERSION}-[0-9]*.src.rpm)"
+
+        echo "FIO_PKG_DEBUG_FILENAME=${FIO_PKG_DEBUG_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_DEBUG_SOURCE_FILENAME=${FIO_PKG_DEBUG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_HIPFILE_ENGINE_FILENAME=${FIO_PKG_HIPFILE_ENGINE_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
+    - name: (Fedora-based) Print package metadata for debugging
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      env:
+        _rpm_path: ./RPMS/x86_64
+        _srpm_path: ./SRPMS
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/rpmbuild
+      run: |
+        echo "Runtime Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-fedora.outputs.FIO_PKG_FILENAME) }}
+        echo -e "\n\nDebug Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-fedora.outputs.FIO_PKG_DEBUG_FILENAME) }}
+        echo -e "\n\nDebug Source Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-fedora.outputs.FIO_PKG_DEBUG_SOURCE_FILENAME) }}
+        echo -e "\n\nhipFile FIO Engine Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._rpm_path, steps.metadata-fedora.outputs.FIO_PKG_HIPFILE_ENGINE_FILENAME) }}
+        echo -e "\n\nSource Package:"
+        ${{ format('rpm -qpil --requires {0}/{1}', env._srpm_path, steps.metadata-fedora.outputs.FIO_PKG_SOURCE_FILENAME) }}
+    - name: (Debian-based) Build FIO with hipFile support
+      id: build-debian
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}/fio-src
+      run: |
+        dpkg-buildpackage --sanitize-env --build=full -uc
+    - name: (Debian-based) Capture package metadata
+      id: metadata-debian
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}
+      run: |
+        shopt -s nullglob
+        ls -al
+        FIO_PKG_DEBUG_FILENAME="$(echo fio-dbgsym_[0-9]*.ddeb)"
+        FIO_PKG_EXAMPLE_FILENAME="$(echo fio-examples_[0-9]*.deb)"
+        FIO_PKG_FILENAME="$(echo fio_[0-9]*.deb)"
+        FIO_PKG_SOURCE_FILENAME="$(echo fio_[0-9]*.debian.tar.xz)"
+
+        echo "FIO_PKG_DEBUG_FILENAME=${FIO_PKG_DEBUG_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_EXAMPLE_FILENAME=${FIO_PKG_EXAMPLE_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_FILENAME=${FIO_PKG_FILENAME}" >> "${GITHUB_OUTPUT}"
+        echo "FIO_PKG_SOURCE_FILENAME=${FIO_PKG_SOURCE_FILENAME}" >> "${GITHUB_OUTPUT}"
+    - name: (Debian-based) Print package metadata for debugging
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      shell: bash
+      working-directory: ${{ inputs.fio_workspace }}
+      run: |
+        echo "Runtime Package:"
+        ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.metadata-debian.outputs.FIO_PKG_FILENAME) }}
+        echo -e "\n\nDebug Package:"
+        ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.metadata-debian.outputs.FIO_PKG_DEBUG_FILENAME) }}
+        echo -e "\n\nExample Package:"
+        ${{ format( 'dpkg-deb -I "{0}" && dpkg-deb -c "{0}"', steps.metadata-debian.outputs.FIO_PKG_EXAMPLE_FILENAME) }}
+        echo -e "\n\nSource Package:"
+        ${{ format('tar --list -f {0}', steps.metadata-debian.outputs.FIO_PKG_SOURCE_FILENAME) }}

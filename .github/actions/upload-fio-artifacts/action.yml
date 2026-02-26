@@ -1,0 +1,238 @@
+name: upload_FIO_artifacts
+description: |
+  Upload FIO packages for the target Linux OS platform as artifacts.
+  Having these steps within a composite action allows us to hide
+  numerous skipped steps that are OS specific.
+inputs:
+  fio_workspace:
+    description: Path to the FIO workspace.
+    required: true
+    type: string
+  platform:
+    required: true
+    type: string
+  pkg_type:
+    description: |
+      'RPM' or 'DEB' package to build.
+      Explicitly provided instead of assuming this variable name
+      exists as an environment variable.
+    required: true
+    type: string
+  rpm_spec_maintainer:
+    description: |
+      Use the RPM spec file maintained by this distro. Has no effect
+      on Debian based builds.
+      Accepts: 'fedora' or 'suse'.
+
+      Explicitly provided instead of assuming this variable name
+      exists as an environment variable.
+    required: false
+    type: string
+
+  # Debian Filenames
+  fio_pkg_debian_filename:
+    required: false
+    type: string
+  fio_pkg_debian_debug_filename:
+    required: false
+    type: string
+  fio_pkg_debian_example_filename:
+    required: false
+    type: string
+  fio_pkg_debian_source_filename:
+    required: false
+    type: string
+
+  # Fedora Filenames
+  fio_pkg_fedora_filename:
+    required: false
+    type: string
+  fio_pkg_fedora_debug_filename:
+    required: false
+    type: string
+  fio_pkg_fedora_debug_source_filename:
+    required: false
+    type: string
+  fio_pkg_fedora_hipfile_engine_filename:
+    required: false
+    type: string
+  fio_pkg_fedora_source_filename:
+    required: false
+    type: string
+
+  # SUSE Filenames
+  fio_pkg_suse_filename:
+    required: false
+    type: string
+  fio_pkg_suse_gfio_filename:
+    required: false
+    type: string
+  fio_pkg_suse_source_filename:
+    required: false
+    type: string
+outputs:
+  # Note: Only outputs matching inputs.platform will be set.
+  fio_pkg_debian_artifact_id:
+    description: "GHA Artifact ID for the Debian FIO package."
+    value: ${{ steps.artifact-debian-runtime.outputs.artifact-id }}
+  fio_pkg_debian_debug_artifact_id:
+    description: "GHA Artifact ID for the Debian FIO debug package."
+    value: ${{ steps.artifact-debian-debug.outputs.artifact-id }}
+  fio_pkg_debian_example_artifact_id:
+    description: "GHA Artifact ID for the Debian FIO example package."
+    value: ${{ steps.artifact-debian-example.outputs.artifact-id }}
+  fio_pkg_debian_source_artifact_id:
+    description: "GHA Artifact ID for the Debian FIO source package."
+    value: ${{ steps.artifact-debian-source.outputs.artifact-id }}
+  fio_pkg_fedora_artifact_id:
+    description: "GHA Artifact ID for the Fedora FIO package."
+    value: ${{ steps.artifact-fedora-runtime.outputs.artifact-id }}
+  fio_pkg_fedora_debug_artifact_id:
+    description: "GHA Artifact ID for the Fedora FIO debug package."
+    value: ${{ steps.artifact-fedora-debug.outputs.artifact-id }}
+  fio_pkg_fedora_debug_source_artifact_id:
+    description: "GHA Artifact ID for the Fedora FIO debug source package."
+    value: ${{ steps.artifact-fedora-debug-source.outputs.artifact-id }}
+  fio_pkg_fedora_hipfile_engine_artifact_id:
+    description: "GHA Artifact ID for the Fedora FIO hipFile engine package."
+    value: ${{ steps.artifact-fedora-hipfile-engine.outputs.artifact-id }}
+  fio_pkg_fedora_source_artifact_id:
+    description: "GHA Artifact ID for the Fedora FIO source package."
+    value: ${{ steps.artifact-fedora-source.outputs.artifact-id }}
+  fio_pkg_suse_artifact_id:
+    description: "GHA Artifact ID for the SUSE FIO package."
+    value: ${{ steps.artifact-suse-runtime.outputs.artifact-id }}
+  fio_pkg_suse_gfio_artifact_id:
+    description: "GHA Artifact ID for the SUSE GFIO package."
+    value: ${{ steps.artifact-suse-gfio.outputs.artifact-id }}
+  fio_pkg_suse_source_artifact_id:
+    description: "GHA Artifact ID for the SUSE FIO source package."
+    value: ${{ steps.artifact-suse-source.outputs.artifact-id }}
+runs:
+  using: "composite"
+  steps:
+    # Debian Artifacts
+    - name: (Debian-based) Upload runtime FIO Package as an Artifact
+      id: artifact-debian-runtime
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_debian_filename }}
+        path: ${{ format('{0}/{1}', inputs.fio_workspace, inputs.fio_pkg_debian_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Debian-based) Upload debug FIO Package as an Artifact
+      id: artifact-debian-debug
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_debian_debug_filename }}
+        path: ${{ format('{0}/{1}', inputs.fio_workspace, inputs.fio_pkg_debian_debug_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Debian-based) Upload example FIO Package as an Artifact
+      id: artifact-debian-example
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_debian_example_filename }}
+        path: ${{ format('{0}/{1}', inputs.fio_workspace, inputs.fio_pkg_debian_example_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Debian-based) Upload source FIO Package as an Artifact
+      id: artifact-debian-source
+      if: ${{ inputs.pkg_type == 'DEB' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_debian_source_filename }}
+        path: ${{ format('{0}/{1}', inputs.fio_workspace, inputs.fio_pkg_debian_source_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+
+    # Fedora Artifacts
+    - name: (Fedora-based) Upload FIO Runtime Package as an Artifact
+      id: artifact-fedora-runtime
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_fedora_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_fedora_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Fedora-based) Upload FIO Debug Package as an Artifact
+      id: artifact-fedora-debug
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_fedora_debug_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_fedora_debug_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Fedora-based) Upload FIO Debug Source Package as an Artifact
+      id: artifact-fedora-debug-source
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_fedora_debug_source_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_fedora_debug_source_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Fedora-based) Upload FIO hipFile IO Engine Package as an Artifact
+      id: artifact-fedora-hipfile-engine
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_fedora_hipfile_engine_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_fedora_hipfile_engine_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (Fedora-based) Upload FIO Source Package as an Artifact
+      id: artifact-fedora-source
+      if: ${{ inputs.rpm_spec_maintainer == 'fedora' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_fedora_source_filename }}
+        path: ${{ format('{0}/rpmbuild/SRPMS/{1}', inputs.fio_workspace, inputs.fio_pkg_fedora_source_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+
+    # SUSE Artifacts
+    - name: (SUSE-based) Upload FIO Runtime Package as an Artifact
+      id: artifact-suse-runtime
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_suse_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_suse_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (SUSE-based) Upload GFIO Package as an Artifact
+      id: artifact-suse-gfio
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_suse_gfio_filename }}
+        path: ${{ format('{0}/rpmbuild/RPMS/x86_64/{1}', inputs.fio_workspace, inputs.fio_pkg_suse_gfio_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+    - name: (SUSE-based) Upload FIO Source Package as an Artifact
+      id: artifact-suse-source
+      if: ${{ inputs.rpm_spec_maintainer == 'suse' }}
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f #v6.0.0
+      with:
+        name: ${{ inputs.fio_pkg_suse_source_filename }}
+        path: ${{ format('{0}/rpmbuild/SRPMS/{1}', inputs.fio_workspace, inputs.fio_pkg_suse_source_filename) }}
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
