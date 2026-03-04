@@ -108,7 +108,7 @@ static pthread_mutex_t running_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static const char *fio_libhipfile_get_hip_error(hipFileError_t st)
 {
-	if (IS_HIPFILE_ERR(st.err))
+	if (st.err > HIPFILE_BASE_ERR)
 		return hipFileGetOpErrorString(st.err);
 	return "unknown";
 }
