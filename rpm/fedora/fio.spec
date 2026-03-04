@@ -108,7 +108,7 @@ Recommends:     %{name}-engine-xnvme
 Recommends:     %{name}-engine-cuda
 %endif
 %if %{with hipfile}
-Recommends:     %{name}-engine-hipfile
+Recommends:     %{name}-engine-libhipfile
 %endif
 %ifnarch %{arm}
 Recommends:     %{name}-engine-rdma
@@ -204,11 +204,11 @@ cuda engine for %{name}.
 %endif
 
 %if %{with hipfile}
-%package engine-hipfile
+%package engine-libhipfile
 Summary: ROCm hipFile engine for %{name}.
 Requires: %{name}%{?_isa} = %{version}-%{release}
 
-%description engine-hipfile
+%description engine-libhipfile
 ROCm hipFile engine for %{name}.
 %endif
 
@@ -306,8 +306,8 @@ make install prefix=%{_prefix} mandir=%{_mandir} libdir=%{_libdir}/fio DESTDIR=$
 %endif
 
 %if %{with hipfile}
-%files engine-hipfile
-%{_libdir}/fio/fio-hipfile.so
+%files engine-libhipfile
+%{_libdir}/fio/fio-libhipfile.so
 %endif
 
 %ifnarch %{arm}

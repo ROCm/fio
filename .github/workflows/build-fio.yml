@@ -1,0 +1,238 @@
+name: FIO-Build
+on:
+  workflow_call:
+    inputs:
+      ais_hipfile_pkg_filename:
+        description: "hipFile runtime package filename"
+        required: false
+        type: string
+      ais_hipfile_pkg_dev_filename:
+        description: "hipFile development package filename"
+        required: false
+        type: string
+      platform:
+        required: true
+        type: string
+    outputs:
+      # Note: Only outputs matching inputs.platform will be set.
+      fio_pkg_debian_filename:
+        description: "FIO runtime package for Debian & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_filename }}
+      fio_pkg_debian_artifact_id:
+        description: "GHA Artifact ID for the Debian FIO package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_artifact_id }}
+      fio_pkg_debian_debug_filename:
+        description: "FIO debug package for Debian & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_debug_filename }}
+      fio_pkg_debian_debug_artifact_id:
+        description: "GHA Artifact ID for the Debian FIO debug package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_debug_artifact_id }}
+      fio_pkg_debian_example_filename:
+        description: "FIO example package for Debian & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_example_filename }}
+      fio_pkg_debian_example_artifact_id:
+        description: "GHA Artifact ID for the Debian FIO example package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_example_artifact_id }}
+      fio_pkg_debian_source_filename:
+        description: "FIO source package for Debian & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_source_filename }}
+      fio_pkg_debian_source_artifact_id:
+        description: "GHA Artifact ID for the Debian FIO source package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_debian_source_artifact_id }}
+      fio_pkg_fedora_filename:
+        description: "FIO runtime package for Fedora & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_filename }}
+      fio_pkg_fedora_artifact_id:
+        description: "GHA Artifact ID for the Fedora FIO package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_artifact_id }}
+      fio_pkg_fedora_debug_filename:
+        description: "FIO debug package for Fedora & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_debug_filename }}
+      fio_pkg_fedora_debug_artifact_id:
+        description: "GHA Artifact ID for the Fedora FIO debug package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_debug_artifact_id }}
+      fio_pkg_fedora_debug_source_filename:
+        description: "FIO debug source package for Fedora & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_debug_source_filename }}
+      fio_pkg_fedora_debug_source_artifact_id:
+        description: "GHA Artifact ID for the Fedora FIO debug source package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_debug_source_artifact_id }}
+      fio_pkg_fedora_hipfile_engine_filename:
+        description: "FIO hipFile engine package for Fedora & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_hipfile_engine_filename }}
+      fio_pkg_fedora_hipfile_engine_artifact_id:
+        description: "GHA Artifact ID for the Fedora FIO hipFile engine package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_hipfile_engine_artifact_id }}
+      fio_pkg_fedora_source_filename:
+        description: "FIO source package for Fedora & downstream distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_source_filename }}
+      fio_pkg_fedora_source_artifact_id:
+        description: "GHA Artifact ID for the Fedora FIO source package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_fedora_source_artifact_id }}
+      fio_pkg_suse_filename:
+        description: "FIO runtime package for SUSE distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_filename }}
+      fio_pkg_suse_artifact_id:
+        description: "GHA Artifact ID for the SUSE FIO package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_artifact_id }}
+      fio_pkg_suse_gfio_filename:
+        description: "GFIO package for SUSE distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_gfio_filename }}
+      fio_pkg_suse_gfio_artifact_id:
+        description: "GHA Artifact ID for the SUSE GFIO package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_gfio_artifact_id }}
+      fio_pkg_suse_source_filename:
+        description: "FIO source package for SUSE distros."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_source_filename }}
+      fio_pkg_suse_source_artifact_id:
+        description: "GHA Artifact ID for the SUSE FIO source package."
+        value: ${{ jobs.build_FIO.outputs.fio_pkg_suse_source_artifact_id }}
+env:
+  # These packages are targeted from the nightly release.
+  # This will need to be updated if we change the filename/version.
+  DEFAULT_HIPFILE_PKG_NAME: >-
+    ${{
+      case(
+        inputs.platform == 'rocky', 'hipfile-0.2.0.70200-nightly.9999.el9.x86_64.rpm',
+        inputs.platform == 'suse', 'hipfile-0.2.0.70200-nightly.opensuse156.9999.x86_64.rpm',
+        inputs.platform == 'ubuntu', 'hipfile_0.2.0.70200-nightly.9999.24.04_amd64.deb',
+        ''
+      )
+    }}
+  DEFAULT_HIPFILE_DEV_PKG_NAME: >-
+    ${{
+      case(
+        inputs.platform == 'rocky', 'hipfile-devel-0.2.0.70200-nightly.9999.el9.x86_64.rpm',
+        inputs.platform == 'suse', 'hipfile-devel-0.2.0.70200-nightly.opensuse156.9999.x86_64.rpm',
+        inputs.platform == 'ubuntu', 'hipfile-dev_0.2.0.70200-nightly.9999.24.04_amd64.deb',
+        ''
+      )
+    }}
+  HIPFILE_NIGHTLY_RELEASE_URL: https://github.com/ROCm/hipFile/releases/download/nightly
+  PKG_INSTALL_CMD: >-
+    ${{
+      case(
+        inputs.platform == 'rocky', 'dnf install -y --cacheonly',
+        inputs.platform == 'suse', 'zypper --no-refresh install -y --allow-unsigned-rpm',
+        inputs.platform == 'ubuntu', 'apt install -y',
+        ''
+      )
+    }}
+  PKG_TYPE: ${{ inputs.platform == 'ubuntu' && 'DEB' || 'RPM' }}
+  RPM_SPEC_MAINTAINER: >-
+    ${{
+      case(
+        inputs.platform == 'rocky', 'fedora',
+        inputs.platform == 'suse', 'suse',
+        ''
+      )
+    }}
+permissions:
+  contents: read
+  packages: read
+jobs:
+  build_FIO:
+    runs-on: [ubuntu-24.04]
+    container:
+      image: >-
+        ${{
+          case(
+            inputs.platform == 'rocky', 'ghcr.io/rocm/fio/fio_build_rocky:latest',
+            inputs.platform == 'suse', 'ghcr.io/rocm/fio/fio_build_suse:latest',
+            inputs.platform == 'ubuntu', 'ghcr.io/rocm/fio/fio_build_ubuntu:latest',
+            ''
+          )
+        }}
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      fio_pkg_debian_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_debug_filename }}
+      fio_pkg_debian_debug_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_debian_debug_artifact_id }}
+      fio_pkg_debian_example_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_example_filename }}
+      fio_pkg_debian_example_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_debian_example_artifact_id }}
+      fio_pkg_debian_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_filename }}
+      fio_pkg_debian_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_debian_artifact_id }}
+      fio_pkg_debian_source_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_source_filename }}
+      fio_pkg_debian_source_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_debian_source_artifact_id }}
+      fio_pkg_fedora_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_filename }}
+      fio_pkg_fedora_debug_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_fedora_debug_artifact_id }}
+      fio_pkg_fedora_debug_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_source_filename }}
+      fio_pkg_fedora_debug_source_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_fedora_debug_source_artifact_id }}
+      fio_pkg_fedora_hipfile_engine_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_hipfile_engine_filename }}
+      fio_pkg_fedora_hipfile_engine_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_fedora_hipfile_engine_artifact_id }}
+      fio_pkg_fedora_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_filename }}
+      fio_pkg_fedora_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_fedora_artifact_id }}
+      fio_pkg_fedora_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_source_filename }}
+      fio_pkg_fedora_source_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_fedora_source_artifact_id }}
+      fio_pkg_suse_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_filename }}
+      fio_pkg_suse_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_suse_artifact_id }}
+      fio_pkg_suse_source_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_source_filename }}
+      fio_pkg_suse_source_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_suse_source_artifact_id }}
+      fio_pkg_suse_gfio_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_gfio_filename }}
+      fio_pkg_suse_gfio_artifact_id: ${{ steps.upload-fio.outputs.fio_pkg_suse_gfio_artifact_id }}
+    steps:
+      - name: Download hipFile runtime package artifact
+        if: ${{ inputs.ais_hipfile_pkg_filename != '' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v7.0.0
+        with:
+          name: ${{ inputs.ais_hipfile_pkg_filename }}
+      - name: Download nightly hipFile runtime package
+        if: ${{ inputs.ais_hipfile_pkg_filename == '' }}
+        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_PKG_NAME} -o ${DEFAULT_HIPFILE_PKG_NAME}
+      - name: Download hipFile development package artifact
+        if: ${{ inputs.ais_hipfile_pkg_dev_filename != '' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v7.0.0
+        with:
+          name: ${{ inputs.ais_hipfile_pkg_dev_filename }}
+      - name: Download nightly hipFile development package
+        if: ${{ inputs.ais_hipfile_pkg_dev_filename == '' }}
+        run: curl -L ${HIPFILE_NIGHTLY_RELEASE_URL}/${DEFAULT_HIPFILE_DEV_PKG_NAME} -o ${DEFAULT_HIPFILE_DEV_PKG_NAME}
+      - name: Install hipFile packages
+        run: |
+          ${PKG_INSTALL_CMD} \
+            ./${{ case(inputs.ais_hipfile_pkg_filename != '', inputs.ais_hipfile_pkg_filename, env.DEFAULT_HIPFILE_PKG_NAME) }} \
+            ./${{ case(inputs.ais_hipfile_pkg_dev_filename != '', inputs.ais_hipfile_pkg_dev_filename, env.DEFAULT_HIPFILE_DEV_PKG_NAME) }}
+      - name: Fetching fio repository...
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+        with:
+          # Need to specify, otherwise uses the wrong ref if calling this workflow
+          # from another repo.
+          repository: ROCm/fio
+          ref: >-
+            ${{
+              case(
+                github.repository == 'ROCm/fio', github.ref,
+                'rildixon/ci-hook-for-hipfile'
+              )
+            }}
+          path: ${{ github.workspace }}/fio/fio-src
+      - name: Build FIO Packages
+        id: build-fio
+        # Needs to be called after checkout
+        uses: ./fio/fio-src/.github/actions/build-fio
+        with:
+          fio_workspace: ${{ github.workspace }}/fio
+          platform: ${{ inputs.platform }}
+          pkg_type: ${{ env.PKG_TYPE }}
+          rpm_spec_maintainer: ${{ env.RPM_SPEC_MAINTAINER }}
+      - name: Upload FIO Packages as Artifacts
+        id: upload-fio
+        uses: ./fio/fio-src/.github/actions/upload-fio-artifacts
+        with:
+          fio_workspace: ${{ github.workspace }}/fio
+          platform: ${{ inputs.platform }}
+          pkg_type: ${{ env.PKG_TYPE }}
+          rpm_spec_maintainer: ${{ env.RPM_SPEC_MAINTAINER }}
+          fio_pkg_debian_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_filename }}
+          fio_pkg_debian_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_debug_filename }}
+          fio_pkg_debian_example_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_example_filename }}
+          fio_pkg_debian_source_filename: ${{ steps.build-fio.outputs.fio_pkg_debian_source_filename }}
+          fio_pkg_fedora_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_filename }}
+          fio_pkg_fedora_debug_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_filename }}
+          fio_pkg_fedora_debug_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_debug_source_filename }}
+          fio_pkg_fedora_hipfile_engine_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_hipfile_engine_filename }}
+          fio_pkg_fedora_source_filename: ${{ steps.build-fio.outputs.fio_pkg_fedora_source_filename }}
+          fio_pkg_suse_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_filename }}
+          fio_pkg_suse_gfio_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_gfio_filename }}
+          fio_pkg_suse_source_filename: ${{ steps.build-fio.outputs.fio_pkg_suse_source_filename }}

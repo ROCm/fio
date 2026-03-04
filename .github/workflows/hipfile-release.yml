@@ -10,17 +10,28 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+  packages: read
 jobs:
+  # Debian maintains the DEB control file.
   build_debian_pkg:
-    uses: ./.github/workflows/build-debian.yml
-  build_rpm_pkg:
-    uses: ./.github/workflows/build-rpm.yml
-  build_rpm_suse_pkg:
-    uses: ./.github/workflows/build-rpm-suse.yml
-  release_FIO_with_hipFile:
+    uses: ./.github/workflows/build-fio.yml
+    with:
+      platform: ubuntu
+  # Fedora maintains the RPM spec file.
+  # We currently use Rocky as our supported RHEL-like distro.
+  build_fedora_rpm_pkg:
+    uses: ./.github/workflows/build-fio.yml
+    with:
+      platform: rocky
+  # SUSE maintains their own RPM spec file.
+  build_suse_rpm_pkg:
+    uses: ./.github/workflows/build-fio.yml
+    with:
+      platform: suse
+  release_FIO:
     if: ${{ github.event.pull_request.merged == true }}
     runs-on: [ubuntu-24.04]
-    needs: [build_debian_pkg, build_rpm_pkg, build_rpm_suse_pkg]
+    needs: [build_debian_pkg, build_fedora_rpm_pkg, build_suse_rpm_pkg]
     permissions:
       contents: write
     steps:
@@ -34,18 +45,18 @@ jobs:
             ${{
               format(
                 '{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}',
-                needs.build_debian_pkg.outputs.fio_pkg_debug_artifact_id,
-                needs.build_debian_pkg.outputs.fio_pkg_example_artifact_id,
-                needs.build_debian_pkg.outputs.fio_pkg_artifact_id,
-                needs.build_debian_pkg.outputs.fio_pkg_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_debug_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_debug_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_source_artifact_id,
-                needs.build_rpm_pkg.outputs.fio_pkg_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_source_artifact_id,
-                needs.build_rpm_suse_pkg.outputs.fio_pkg_gfio_artifact_id
+                needs.build_debian_pkg.outputs.fio_pkg_debian_debug_artifact_id,
+                needs.build_debian_pkg.outputs.fio_pkg_debian_example_artifact_id,
+                needs.build_debian_pkg.outputs.fio_pkg_debian_artifact_id,
+                needs.build_debian_pkg.outputs.fio_pkg_debian_source_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_source_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_source_artifact_id,
+                needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_source_artifact_id,
+                needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_gfio_artifact_id
               )
             }}
       - name: List Releases
@@ -71,8 +82,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          echo fio{,-dbgsym,-examples}_[0-9]*.{deb,ddeb,debian.tar.xz}
-          echo fio{,-engine-hipfile}{,-debuginfo,-debugsource}-[0-9]*.rpm
           gh release create \
             --notes "
               Latest Build as of: $(date)
@@ -91,15 +100,15 @@ jobs:
             --target hipFile \
             --title Latest \
             latest \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_debug_filename }} \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_example_filename }} \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_filename }} \
-            ${{ needs.build_debian_pkg.outputs.fio_pkg_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_debug_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_debug_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_hipfile_engine_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_source_filename }} \
-            ${{ needs.build_rpm_pkg.outputs.fio_pkg_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_source_filename }} \
-            ${{ needs.build_rpm_suse_pkg.outputs.fio_pkg_gfio_filename }}
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_debug_filename }} \
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_example_filename }} \
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_filename }} \
+            ${{ needs.build_debian_pkg.outputs.fio_pkg_debian_source_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_debug_source_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_hipfile_engine_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_source_filename }} \
+            ${{ needs.build_fedora_rpm_pkg.outputs.fio_pkg_fedora_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_source_filename }} \
+            ${{ needs.build_suse_rpm_pkg.outputs.fio_pkg_suse_gfio_filename }}
