@@ -33,6 +33,7 @@ rm -rf $config_host_h
 fatal() {
   echo $@
   echo "Configure failed, check config.log and/or the above output"
+  cat config.log
   rm -rf $config_host_mak
   rm -rf $config_host_h
   exit 1
