@@ -120,14 +120,19 @@ ifdef CONFIG_LINUX_EXT4_MOVE_EXTENT
 endif
 ifdef CONFIG_LIBCUFILE
   SOURCE += engines/libcufile.c
+  SHARED_GPUACCEL_SOURCE = 1
 endif
 ifdef CONFIG_LIBHIPFILE
   ROCM_PATH := /opt/rocm
-  hipfile_SRCS = engines/libhipfile.c
+  hipfile_SRCS = engines/libhipfile.c engines/gpuaccel.c
   hipfile_CFLAGS += -I${ROCM_PATH}/include
   LDFLAGS += -L${ROCM_PATH}/lib -Wl,-rpath,${ROCM_PATH}/lib
   hipfile_LIBS = -lamdhip64 -lhipfile
   ENGINES += hipfile
+  SHARED_GPUACCEL_SOURCE = 1
+endif
+ifdef SHARED_GPUACCEL_SOURCE
+  SOURCE += engines/gpuaccel.c
 endif
 ifdef CONFIG_LINUX_SPLICE
   SOURCE += engines/splice.c
@@ -297,7 +302,7 @@ define engine_template =
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 $$($(1)_OBJS): CFLAGS := -fPIC $$($(1)_CFLAGS) $(CFLAGS)
 engines/fio-$(1).so: $$($(1)_OBJS)
-	$$(QUIET_LINK)$(CC) $(LDFLAGS) -shared -rdynamic -fPIC -Wl,-soname,fio-$(1).so.1 -o $$@ $$< $$($(1)_LIBS)
+	$$(QUIET_LINK)$(CC) $(LDFLAGS) -shared -rdynamic -fPIC -Wl,-soname,fio-$(1).so.1 -o $$@ $$^ $$($(1)_LIBS)
 ENGS_OBJS += engines/fio-$(1).so
 endef
 else # !CONFIG_DYNAMIC_ENGINES
