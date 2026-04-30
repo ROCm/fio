@@ -124,7 +124,7 @@ ifdef CONFIG_LIBCUFILE
 endif
 ifdef CONFIG_LIBHIPFILE
   ROCM_PATH := /opt/rocm
-  hipfile_SRCS = engines/libhipfile.c engines/gpuaccel.c
+  hipfile_SRCS = engines/libhipfile.c
   hipfile_CFLAGS += -I${ROCM_PATH}/include
   LDFLAGS += -L${ROCM_PATH}/lib -Wl,-rpath,${ROCM_PATH}/lib
   hipfile_LIBS = -lamdhip64 -lhipfile

@@ -134,7 +134,7 @@ static int libcufile_mem_set(void *mem, int value, size_t size)
 
 static int libcufile_mem_copy(void *dst, const void *src, size_t size, int direction)
 {
-	cudaMemcpyKind kind;
+	enum cudaMemcpyKind kind;
 
 	switch (direction) {
 	case GPUACCEL_MEMCPY_H2D:

@@ -133,7 +133,7 @@ static int libhipfile_mem_set(void *mem, int value, size_t size)
 
 static int libhipfile_mem_copy(void *dst, const void *src, size_t size, int direction)
 {
-	hipMemcpyKind kind;
+	enum hipMemcpyKind kind;
 
 	switch (direction) {
 	case GPUACCEL_MEMCPY_H2D:
