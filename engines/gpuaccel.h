@@ -18,8 +18,6 @@
 struct gpuaccel_backend {
 	const char *name;
 	const char *direct_io_name;
-	unsigned int direct_mode;
-	unsigned int posix_mode;
 	int *running;
 	int *initialized;
 	pthread_mutex_t *running_lock;

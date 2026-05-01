@@ -22,16 +22,6 @@
 #include "../optgroup.h"
 #include "gpuaccel.h"
 
-enum {
-	IO_HIPFILE = GPUACCEL_IO_DIRECT_MODE,
-	IO_POSIX = GPUACCEL_IO_POSIX_MODE,
-};
-
-struct libhipfile_options {
-	struct gpuaccel_options gopts;
-	unsigned int rocm_io;
-};
-
 struct libhipfile_file_handle {
 	hipFileHandle_t hf_handle;
 };
@@ -41,7 +31,7 @@ static struct fio_option options[] = {
 		.name	  = "gpu_dev_ids",
 		.lname	  = "libhipfile engine gpu dev ids",
 		.type	  = FIO_OPT_STR_STORE,
-		.off1	  = offsetof(struct libhipfile_options, gopts.gpu_ids),
+		.off1	  = offsetof(struct gpuaccel_options, gpu_ids),
 		.help	  = "GPU IDs, one per subjob, separated by " GPUACCEL_GPU_ID_SEP,
 		.category = FIO_OPT_C_ENGINE,
 		.group	  = FIO_OPT_G_LIBHIPFILE,
@@ -50,16 +40,16 @@ static struct fio_option options[] = {
 		.name	  = "rocm_io",
 		.lname	  = "libhipfile rocm io",
 		.type	  = FIO_OPT_STR,
-		.off1	  = offsetof(struct libhipfile_options, rocm_io),
+		.off1	  = offsetof(struct gpuaccel_options, io_mode),
 		.help	  = "Type of I/O to use with ROCm",
 		.def      = "hipfile",
 		.posval   = {
 			    { .ival = "hipfile",
-			      .oval = IO_HIPFILE,
+			      .oval = GPUACCEL_IO_DIRECT_MODE,
 			      .help = "libhipfile"
 			    },
 			    { .ival = "posix",
-			      .oval = IO_POSIX,
+			      .oval = GPUACCEL_IO_POSIX_MODE,
 			      .help = "POSIX I/O"
 			    }
 		},
@@ -229,8 +219,6 @@ static const char *libhipfile_op_error_string(int error_code)
 static const struct gpuaccel_backend libhipfile_backend = {
 	.name = "ROCm",
 	.direct_io_name = "hipFile",
-	.direct_mode = IO_HIPFILE,
-	.posix_mode = IO_POSIX,
 	.running = &running,
 	.initialized = &hipfile_initialized,
 	.running_lock = &running_lock,
@@ -256,10 +244,9 @@ static const struct gpuaccel_backend libhipfile_backend = {
 
 static int fio_libhipfile_init(struct thread_data *td)
 {
-	struct libhipfile_options *o = td->eo;
+	struct gpuaccel_options *o = td->eo;
 
-	o->gopts.io_mode = o->rocm_io;
-	o->gopts.backend = &libhipfile_backend;
+	o->backend = &libhipfile_backend;
 
 	return fio_gpuaccel_init(td);
 }
@@ -277,7 +264,7 @@ FIO_STATIC struct ioengine_ops ioengine = {
 	.cleanup            = fio_gpuaccel_cleanup,
 	.flags              = FIO_SYNCIO,
 	.options            = options,
-	.option_struct_size = sizeof(struct libhipfile_options),
+	.option_struct_size = sizeof(struct gpuaccel_options),
 };
 
 void fio_init fio_libhipfile_register(void)

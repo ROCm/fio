@@ -23,16 +23,6 @@
 #include "../optgroup.h"
 #include "gpuaccel.h"
 
-enum {
-	IO_CUFILE = GPUACCEL_IO_DIRECT_MODE,
-	IO_POSIX = GPUACCEL_IO_POSIX_MODE,
-};
-
-struct libcufile_options {
-	struct gpuaccel_options gopts;
-	unsigned int cuda_io;
-};
-
 struct libcufile_file_handle {
 	CUfileHandle_t cf_handle;
 };
@@ -42,7 +32,7 @@ static struct fio_option options[] = {
 		.name	  = "gpu_dev_ids",
 		.lname	  = "libcufile engine gpu dev ids",
 		.type	  = FIO_OPT_STR_STORE,
-		.off1	  = offsetof(struct libcufile_options, gopts.gpu_ids),
+		.off1	  = offsetof(struct gpuaccel_options, gpu_ids),
 		.help	  = "GPU IDs, one per subjob, separated by " GPUACCEL_GPU_ID_SEP,
 		.category = FIO_OPT_C_ENGINE,
 		.group	  = FIO_OPT_G_LIBCUFILE,
@@ -51,16 +41,16 @@ static struct fio_option options[] = {
 		.name	  = "cuda_io",
 		.lname	  = "libcufile cuda io",
 		.type	  = FIO_OPT_STR,
-		.off1	  = offsetof(struct libcufile_options, cuda_io),
+		.off1	  = offsetof(struct gpuaccel_options, io_mode),
 		.help	  = "Type of I/O to use with CUDA",
 		.def	  = "cufile",
 		.posval   = {
 			    { .ival = "cufile",
-			      .oval = IO_CUFILE,
+			      .oval = GPUACCEL_IO_DIRECT_MODE,
 			      .help = "libcufile nvidia-fs"
 			    },
 			    { .ival = "posix",
-			      .oval = IO_POSIX,
+			      .oval = GPUACCEL_IO_POSIX_MODE,
 			      .help = "POSIX I/O"
 			    }
 		},
@@ -230,8 +220,6 @@ static const char *libcufile_op_error_string(int error_code)
 static const struct gpuaccel_backend libcufile_backend = {
 	.name = "CUDA",
 	.direct_io_name = "cuFile",
-	.direct_mode = IO_CUFILE,
-	.posix_mode = IO_POSIX,
 	.running = &running,
 	.initialized = &cufile_initialized,
 	.running_lock = &running_lock,
@@ -257,10 +245,9 @@ static const struct gpuaccel_backend libcufile_backend = {
 
 static int fio_libcufile_init(struct thread_data *td)
 {
-	struct libcufile_options *o = td->eo;
+	struct gpuaccel_options *o = td->eo;
 
-	o->gopts.io_mode = o->cuda_io;
-	o->gopts.backend = &libcufile_backend;
+	o->backend = &libcufile_backend;
 
 	return fio_gpuaccel_init(td);
 }
@@ -278,7 +265,7 @@ FIO_STATIC struct ioengine_ops ioengine = {
 	.cleanup            = fio_gpuaccel_cleanup,
 	.flags              = FIO_SYNCIO,
 	.options            = options,
-	.option_struct_size = sizeof(struct libcufile_options),
+	.option_struct_size = sizeof(struct gpuaccel_options),
 };
 
 void fio_init fio_libcufile_register(void)

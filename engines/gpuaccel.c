@@ -55,7 +55,7 @@ int fio_gpuaccel_init(struct thread_data *td)
 	pthread_mutex_lock(be->running_lock);
 	if (*be->running == 0) {
 		assert(*be->initialized == 0);
-		if (o->io_mode == be->direct_mode) {
+		if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 			if (be->driver_open() != 0)
 				log_err("%s driver open failed\n", be->direct_io_name);
 			else
@@ -66,7 +66,7 @@ int fio_gpuaccel_init(struct thread_data *td)
 	initialized = *be->initialized;
 	pthread_mutex_unlock(be->running_lock);
 
-	if (o->io_mode == be->direct_mode && !initialized)
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE && !initialized)
 		return 1;
 
 	o->my_gpu_id = fio_gpuaccel_find_gpu_id(td, o);
@@ -88,7 +88,7 @@ static inline int fio_gpuaccel_pre_write(struct thread_data *td,
 	const struct gpuaccel_backend *be = o->backend;
 	int rc = 0;
 
-	if (o->io_mode == be->direct_mode) {
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 		if (td->o.verify) {
 			rc = be->mem_copy(((char *) o->gpu_mem_ptr) + gpu_offset,
 					  io_u->xfer_buf,
@@ -99,7 +99,7 @@ static inline int fio_gpuaccel_pre_write(struct thread_data *td,
 				io_u->error = EIO;
 			}
 		}
-	} else if (o->io_mode == be->posix_mode) {
+	} else if (o->io_mode == GPUACCEL_IO_POSIX_MODE) {
 		rc = be->mem_copy(((char *) o->junk_buf) + gpu_offset,
 				  ((char *) o->gpu_mem_ptr) + gpu_offset,
 				  io_u->xfer_buflen,
@@ -132,7 +132,7 @@ static inline int fio_gpuaccel_post_read(struct thread_data *td,
 	const struct gpuaccel_backend *be = o->backend;
 	int rc = 0;
 
-	if (o->io_mode == be->direct_mode) {
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 		if (td->o.verify) {
 			rc = be->mem_copy(io_u->xfer_buf,
 					  ((char *) o->gpu_mem_ptr) + gpu_offset,
@@ -150,7 +150,7 @@ static inline int fio_gpuaccel_post_read(struct thread_data *td,
 				}
 			}
 		}
-	} else if (o->io_mode == be->posix_mode) {
+	} else if (o->io_mode == GPUACCEL_IO_POSIX_MODE) {
 		rc = be->mem_copy(((char *) o->gpu_mem_ptr) + gpu_offset,
 				  io_u->xfer_buf,
 				  io_u->xfer_buflen,
@@ -181,7 +181,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 	size_t gpu_offset;
 	int rc;
 
-	if (o->io_mode == be->direct_mode && file_handle == NULL) {
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE && file_handle == NULL) {
 		io_u->error = EINVAL;
 		td_verror(td, EINVAL, "xfer");
 		return FIO_Q_COMPLETED;
@@ -217,7 +217,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 
 		assert(gpu_offset + io_u->xfer_buflen <= o->total_mem);
 
-		if (o->io_mode == be->direct_mode) {
+		if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 			if (!(ALIGNED_4KB(io_u->xfer_buflen) ||
 			      (o->logged & GPUACCEL_LOGGED_BUFLEN_NOT_ALIGNED))) {
 				log_err("buflen not 4KB-aligned: %llu\n", io_u->xfer_buflen);
@@ -240,7 +240,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 		while (remaining > 0) {
 			assert(gpu_offset + xfered <= o->total_mem);
 			if (io_u->ddir == DDIR_READ) {
-				if (o->io_mode == be->direct_mode) {
+				if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 					sz = be->direct_read(file_handle, o->gpu_mem_ptr,
 							remaining, io_offset + xfered,
 							gpu_offset + xfered);
@@ -254,7 +254,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 							be->direct_io_name, sz,
 							be->op_error_string(-sz));
 					}
-				} else if (o->io_mode == be->posix_mode) {
+				} else if (o->io_mode == GPUACCEL_IO_POSIX_MODE) {
 					sz = pread(io_u->file->fd,
 						   ((char *) io_u->xfer_buf) + xfered,
 						   remaining, io_offset + xfered);
@@ -269,7 +269,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 					assert(0);
 				}
 			} else if (io_u->ddir == DDIR_WRITE) {
-				if (o->io_mode == be->direct_mode) {
+				if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 					sz = be->direct_write(file_handle, o->gpu_mem_ptr,
 							 remaining, io_offset + xfered,
 							 gpu_offset + xfered);
@@ -283,7 +283,7 @@ enum fio_q_status fio_gpuaccel_queue(struct thread_data *td,
 							be->direct_io_name, sz,
 							be->op_error_string(-sz));
 					}
-				} else if (o->io_mode == be->posix_mode) {
+				} else if (o->io_mode == GPUACCEL_IO_POSIX_MODE) {
 					sz = pwrite(io_u->file->fd,
 						    ((char *) io_u->xfer_buf) + xfered,
 						    remaining, io_offset + xfered);
@@ -347,7 +347,7 @@ int fio_gpuaccel_open_file(struct thread_data *td, struct fio_file *f)
 	if (rc)
 		return rc;
 
-	if (o->io_mode == be->direct_mode) {
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 		rc = be->file_handle_register(f->fd, &handle);
 		if (rc != 0)
 			goto exit_err;
@@ -398,7 +398,7 @@ int fio_gpuaccel_iomem_alloc(struct thread_data *td, size_t total_mem)
 		goto exit_error;
 	}
 
-	if (o->io_mode == be->posix_mode) {
+	if (o->io_mode == GPUACCEL_IO_POSIX_MODE) {
 		o->junk_buf = calloc(1, total_mem);
 		if (o->junk_buf == NULL) {
 			log_err("junk_buf calloc failed: err=%d\n", errno);
@@ -419,7 +419,7 @@ int fio_gpuaccel_iomem_alloc(struct thread_data *td, size_t total_mem)
 			goto exit_error;
 	}
 
-	if (o->io_mode == be->direct_mode) {
+	if (o->io_mode == GPUACCEL_IO_DIRECT_MODE) {
 		rc = be->buf_register(o->gpu_mem_ptr, total_mem);
 		if (rc != 0)
 			goto exit_error;
@@ -453,7 +453,7 @@ void fio_gpuaccel_iomem_free(struct thread_data *td)
 		o->junk_buf = NULL;
 	}
 	if (o->gpu_mem_ptr) {
-		if (o->io_mode == be->direct_mode)
+		if (o->io_mode == GPUACCEL_IO_DIRECT_MODE)
 			be->buf_deregister(o->gpu_mem_ptr);
 		be->mem_free(o->gpu_mem_ptr);
 		o->gpu_mem_ptr = NULL;
@@ -473,7 +473,7 @@ void fio_gpuaccel_cleanup(struct thread_data *td)
 	(*be->running)--;
 	assert(*be->running >= 0);
 	if (*be->running == 0) {
-		if (o->io_mode == be->direct_mode && *be->initialized)
+		if (o->io_mode == GPUACCEL_IO_DIRECT_MODE && *be->initialized)
 			be->driver_close();
 		*be->initialized = 0;
 	}
