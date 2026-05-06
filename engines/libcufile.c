@@ -42,6 +42,32 @@ enum {
 	MEMCPY_DIRECTION_D2H = 2
 };
 
+struct gpuaccel_backend {
+	const char *name;
+	int (*driver_open)(void);
+	void (*driver_close)(void);
+
+	int (*set_device)(int gpu_id);
+	int (*malloc)(void **mem, size_t size);
+	int (*free)(void *mem);
+	int (*memset)(void *mem, int value, size_t size);
+	int (*memcpy)(void *dst, const void *src, size_t size, int direction);
+	int (*stream_sync)(void);
+
+	int (*file_handle_register)(int fd, void **handle);
+	void (*file_handle_deregister)(void *handle);
+
+	int (*buf_register)(void *mem, size_t size);
+	void (*buf_deregister)(void *mem);
+
+	ssize_t (*read)(void *handle, void *mem, size_t size,
+			      unsigned long long file_offset, size_t mem_offset);
+	ssize_t (*write)(void *handle, const void *mem, size_t size,
+			       unsigned long long file_offset, size_t mem_offset);
+
+	const char *(*op_error_string)(int error_code);
+};
+
 struct libcufile_options {
 	struct thread_data *td;
 	char               *gpu_ids;       /* colon-separated list of GPU ids,
@@ -54,6 +80,7 @@ struct libcufile_options {
 	size_t              total_mem;     /* size for cu_mem_ptr and junk_buf */
 	int                 logged;        /* bitmask of log messages that have
 					      been output, prevent flood */
+	const struct gpuaccel_backend *backend; /* GPU accelerator backend function table */
 };
 
 struct fio_libcufile_data {
@@ -265,6 +292,25 @@ static const char *libcufile_op_error_string(int error_code)
 	return cufileop_status_error(error_code);
 }
 
+static const struct gpuaccel_backend libcufile_backend = {
+	.name = "cufile",
+	.driver_open = libcufile_driver_open,
+	.driver_close = libcufile_driver_close,
+	.set_device = libcufile_set_device,
+	.malloc = libcufile_malloc,
+	.free = libcufile_free,
+	.memset = libcufile_memset,
+	.memcpy = libcufile_memcpy,
+	.stream_sync = libcufile_stream_sync,
+	.file_handle_register = libcufile_file_handle_register,
+	.file_handle_deregister = libcufile_file_handle_deregister,
+	.buf_register = libcufile_buf_register,
+	.buf_deregister = libcufile_buf_deregister,
+	.read = libcufile_read,
+	.write = libcufile_write,
+	.op_error_string = libcufile_op_error_string
+};
+
 /*
  * Assign GPU to subjob roundrobin, similar to how multiple
  * entries in 'directory' are handled by fio.
@@ -310,15 +356,19 @@ static int fio_libcufile_find_gpu_id(struct thread_data *td)
 static int fio_libcufile_init(struct thread_data *td)
 {
 	struct libcufile_options *o = td->eo;
+	const struct gpuaccel_backend *be = NULL;
 	int initialized;
+
+	o->backend = &libcufile_backend;
+	be = o->backend;
 
 	pthread_mutex_lock(&running_lock);
 	if (running == 0) {
 		assert(cufile_initialized == 0);
 		if (o->cuda_io == IO_CUFILE) {
 			/* only open the driver if this is the first worker thread */
-			if (libcufile_driver_open() != 0)
-				log_err("libcufile_driver_open failed\n");
+			if (be->driver_open() != 0)
+				log_err("%s driver_open failed\n", be->name);
 			else
 				cufile_initialized = 1;
 		}
@@ -335,7 +385,7 @@ static int fio_libcufile_init(struct thread_data *td)
 		return 1;
 
 	dprint(FD_MEM, "Subjob %d uses GPU %d\n", td->subjob_number, o->my_gpu_id);
-	if (libcufile_set_device(o->my_gpu_id) != 0)
+	if (be->set_device(o->my_gpu_id) != 0)
 		return 1;
 
 	return 0;
@@ -347,6 +397,7 @@ static inline int fio_libcufile_pre_write(struct thread_data *td,
 					  size_t gpu_offset)
 {
 	int rc = 0;
+	const struct gpuaccel_backend *be = o->backend;
 
 	if (o->cuda_io == IO_CUFILE) {
 		if (td->o.verify) {
@@ -355,11 +406,11 @@ static inline int fio_libcufile_pre_write(struct thread_data *td,
 			  This isn't done in the non-verify case because the data would
 			  already be in GPU memory in a normal cuFile application.
 			*/
-			rc = libcufile_memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
+			rc = be->memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
 					io_u->xfer_buf,
 					io_u->xfer_buflen, MEMCPY_DIRECTION_H2D);
 			if (rc != 0) {
-				log_err("DDIR_WRITE cudaMemcpy H2D failed\n");
+				log_err("DDIR_WRITE %s memcpy H2D failed\n", be->name);
 				io_u->error = EIO;
 			}
 		}
@@ -372,15 +423,15 @@ static inline int fio_libcufile_pre_write(struct thread_data *td,
 		  of this is to add the overhead of cudaMemcpy() that would be
 		  present in a POSIX I/O CUDA application.
 		*/
-		rc = libcufile_memcpy(o->junk_buf + gpu_offset,
+		rc = be->memcpy(o->junk_buf + gpu_offset,
 				((char*) o->cu_mem_ptr) + gpu_offset,
 				io_u->xfer_buflen, MEMCPY_DIRECTION_D2H);
 		if (rc != 0) {
-			log_err("DDIR_WRITE cudaMemcpy D2H failed\n");
+			log_err("DDIR_WRITE %s memcpy D2H failed\n", be->name);
 			io_u->error = EIO;
 		}
 	} else {
-		log_err("Illegal CUDA IO type: %d\n", o->cuda_io);
+		log_err("Illegal %s IO type: %d\n", be->name, o->cuda_io);
 		assert(0);
 		rc = EINVAL;
 	}
@@ -394,31 +445,32 @@ static inline int fio_libcufile_post_read(struct thread_data *td,
 					  size_t gpu_offset)
 {
 	int rc = 0;
+	const struct gpuaccel_backend *be = o->backend;
 
 	if (o->cuda_io == IO_CUFILE) {
 		if (td->o.verify) {
 			/* Copy GPU memory to CPU buffer for verify */
-			rc = libcufile_memcpy(io_u->xfer_buf,
+			rc = be->memcpy(io_u->xfer_buf,
 							 ((char*) o->cu_mem_ptr) + gpu_offset,
 							 io_u->xfer_buflen,
 							 MEMCPY_DIRECTION_D2H);
 			if (rc != 0) {
-				log_err("DDIR_READ cudaMemcpy D2H failed\n");
+				log_err("DDIR_READ %s memcpy D2H failed\n", be->name);
 				io_u->error = EIO;
 			}
 		}
 	} else if (o->cuda_io == IO_POSIX) {
 		/* POSIX I/O read, copy the CPU buffer to GPU memory */
-		rc = libcufile_memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
+		rc = be->memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
 						 io_u->xfer_buf,
 						 io_u->xfer_buflen,
 						 MEMCPY_DIRECTION_H2D);
 		if (rc != 0) {
-			log_err("DDIR_READ cudaMemcpy H2D failed\n");
+			log_err("DDIR_READ %s memcpy H2D failed\n", be->name);
 			io_u->error = EIO;
 		}
 	} else {
-		log_err("Illegal CUDA IO type: %d\n", o->cuda_io);
+		log_err("Illegal %s IO type: %d\n", be->name, o->cuda_io);
 		assert(0);
 		rc = EINVAL;
 	}
@@ -430,7 +482,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 					     struct io_u *io_u)
 {
 	struct libcufile_options *o = td->eo;
-
+	const struct gpuaccel_backend *be = o->backend;
 	void *file_handle = FILE_ENG_DATA(io_u->file);
 	unsigned long long io_offset;
 	ssize_t sz;
@@ -504,15 +556,15 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 			assert(gpu_offset + xfered <= o->total_mem);
 			if (io_u->ddir == DDIR_READ) {
 				if (o->cuda_io == IO_CUFILE) {
-					sz = libcufile_read(file_handle, o->cu_mem_ptr, remaining,
+					sz = be->read(file_handle, o->cu_mem_ptr, remaining,
 							io_offset + xfered, gpu_offset + xfered);
 					if (sz == -1) {
 						io_u->error = errno;
-						log_err("cuFileRead: err=%d\n", errno);
+						log_err("%s Read: err=%d\n", be->name, errno);
 					} else if (sz < 0) {
 						io_u->error = EIO;
-						log_err("cuFileRead: err=%ld:%s\n", sz,
-							libcufile_op_error_string(-sz));
+						log_err("%s Read: err=%ld:%s\n", be->name, sz,
+							be->op_error_string(-sz));
 					}
 				} else if (o->cuda_io == IO_POSIX) {
 					sz = pread(io_u->file->fd, ((char*) io_u->xfer_buf) + xfered,
@@ -532,11 +584,11 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 							 io_offset + xfered, gpu_offset + xfered);
 					if (sz == -1) {
 						io_u->error = errno;
-						log_err("cuFileWrite: err=%d\n", errno);
+						log_err("%s Write: err=%d\n", be->name, errno);
 					} else if (sz < 0) {
 						io_u->error = EIO;
-						log_err("cuFileWrite: err=%ld:%s\n", sz,
-							libcufile_op_error_string(-sz));
+						log_err("%s Write: err=%ld:%s\n", be->name, sz,
+							be->op_error_string(-sz));
 					}
 				} else if (o->cuda_io == IO_POSIX) {
 					sz = pwrite(io_u->file->fd,
@@ -547,7 +599,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 						log_err("pwrite: err=%d\n", errno);
 					}
 				} else {
-					log_err("Illegal CUDA IO type: %d\n", o->cuda_io);
+					log_err("Illegal %s IO type: %d\n", be->name, o->cuda_io);
 					io_u->error = -1;
 					assert(0);
 				}
@@ -592,6 +644,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 static int fio_libcufile_open_file(struct thread_data *td, struct fio_file *f)
 {
 	struct libcufile_options *o = td->eo;
+	const struct gpuaccel_backend *be = o->backend;
 	void *handle = NULL;
 	int rc;
 
@@ -600,7 +653,7 @@ static int fio_libcufile_open_file(struct thread_data *td, struct fio_file *f)
 		return rc;
 
 	if (o->cuda_io == IO_CUFILE) {
-		rc = libcufile_file_handle_register(f->fd, &handle);
+		rc = be->file_handle_register(f->fd, &handle);
 		if (rc != 0) {
 			goto exit_err;
 		}
@@ -626,9 +679,10 @@ static int fio_libcufile_close_file(struct thread_data *td, struct fio_file *f)
 {
 	void *handle = FILE_ENG_DATA(f);
 	int rc;
+	const struct gpuaccel_backend *be = td->eo->backend;
 
 	if (handle != NULL) {
-		libcufile_file_handle_deregister(handle);
+		be->file_handle_deregister(handle);
 		FILE_SET_ENG_DATA(f, NULL);
 		free(handle);
 	}
@@ -641,6 +695,7 @@ static int fio_libcufile_close_file(struct thread_data *td, struct fio_file *f)
 static int fio_libcufile_iomem_alloc(struct thread_data *td, size_t total_mem)
 {
 	struct libcufile_options *o = td->eo;
+	const struct gpuaccel_backend *be = o->backend;
 	int rc;
 
 	o->total_mem = total_mem;
@@ -662,15 +717,15 @@ static int fio_libcufile_iomem_alloc(struct thread_data *td, size_t total_mem)
 	}
 
 	dprint(FD_MEM, "Alloc %zu for GPU %d\n", total_mem, o->my_gpu_id);
-	rc = libcufile_malloc(&o->cu_mem_ptr, total_mem);
+	rc = be->malloc(&o->cu_mem_ptr, total_mem);
 	if (rc != 0)
 		goto exit_error;
-	rc = libcufile_memset(o->cu_mem_ptr, 0xab, total_mem);
+	rc = be->memset(o->cu_mem_ptr, 0xab, total_mem);
 	if (rc != 0)
 		goto exit_error;
 
 	if (o->cuda_io == IO_CUFILE) {
-		rc = libcufile_buf_register(o->cu_mem_ptr, total_mem);
+		rc = be->buf_register(o->cu_mem_ptr, total_mem);
 		if (rc != 0)
 			goto exit_error;
 	}
@@ -687,7 +742,7 @@ exit_error:
 		o->junk_buf = NULL;
 	}
 	if (o->cu_mem_ptr) {
-		libcufile_free(o->cu_mem_ptr);
+		be->free(o->cu_mem_ptr);
 		o->cu_mem_ptr = NULL;
 	}
 	return 1;
@@ -696,6 +751,7 @@ exit_error:
 static void fio_libcufile_iomem_free(struct thread_data *td)
 {
 	struct libcufile_options *o = td->eo;
+	const struct gpuaccel_backend *be = o->backend;
 
 	if (o->junk_buf) {
 		free(o->junk_buf);
@@ -703,8 +759,8 @@ static void fio_libcufile_iomem_free(struct thread_data *td)
 	}
 	if (o->cu_mem_ptr) {
 		if (o->cuda_io == IO_CUFILE)
-			libcufile_buf_deregister(o->cu_mem_ptr);
-		libcufile_free(o->cu_mem_ptr);
+			be->buf_deregister(o->cu_mem_ptr);
+		be->free(o->cu_mem_ptr);
 		o->cu_mem_ptr = NULL;
 	}
 	if (td->orig_buffer) {
@@ -716,6 +772,7 @@ static void fio_libcufile_iomem_free(struct thread_data *td)
 static void fio_libcufile_cleanup(struct thread_data *td)
 {
 	struct libcufile_options *o = td->eo;
+	const struct gpuaccel_backend *be = o->backend;
 
 	pthread_mutex_lock(&running_lock);
 	running--;
@@ -724,7 +781,7 @@ static void fio_libcufile_cleanup(struct thread_data *td)
 		/* only close the driver if initialized and
 		   this is the last worker thread */
 		if (o->cuda_io == IO_CUFILE && cufile_initialized)
-			libcufile_driver_close();
+			be->driver_close();
 		cufile_initialized = 0;
 	}
 	pthread_mutex_unlock(&running_lock);
