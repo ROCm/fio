@@ -37,6 +37,11 @@ enum {
 	IO_POSIX     = 2
 };
 
+enum {
+	MEMCPY_DIRECTION_H2D = 1,
+	MEMCPY_DIRECTION_D2H = 2
+};
+
 struct libcufile_options {
 	struct thread_data *td;
 	char               *gpu_ids;       /* colon-separated list of GPU ids,
@@ -114,6 +119,152 @@ static const char *fio_libcufile_get_cuda_error(CUfileError_t st)
 	return "unknown";
 }
 
+static int libcufile_driver_open(void)
+{
+	CUfileError_t status;
+
+	status = cuFileDriverOpen();
+	if (status.err != CU_FILE_SUCCESS) {
+		log_err("cuFileDriverOpen: err=%d:%s\n", status.err,
+			fio_libcufile_get_cuda_error(status));
+		return -1;
+	}
+
+	return 0;
+}
+
+static void libcufile_driver_close(void)
+{
+	cuFileDriverClose();
+}
+
+static int libcufile_set_device(int gpu_id)
+{
+	int rc;
+
+	check_cudaruntimecall(cudaSetDevice(gpu_id), rc);
+	return rc;
+}
+
+static int libcufile_malloc(void **mem, size_t size)
+{
+	int rc;
+
+	check_cudaruntimecall(cudaMalloc(mem, size), rc);
+	return rc;
+}
+
+static int libcufile_free(void *mem)
+{
+	int rc;
+
+	check_cudaruntimecall(cudaFree(mem), rc);
+	return rc;
+}
+
+static int libcufile_memset(void *mem, int value, size_t size)
+{
+	int rc;
+
+	check_cudaruntimecall(cudaMemset(mem, value, size), rc);
+	return rc;
+}
+
+static int libcufile_memcpy(void *dst, const void *src, size_t size, int direction)
+{
+	int rc;
+	enum cudaMemcpyKind kind;
+
+	switch (direction) {
+	case MEMCPY_DIRECTION_H2D:
+		kind = cudaMemcpyHostToDevice;
+		break;
+	case MEMCPY_DIRECTION_D2H:
+		kind = cudaMemcpyDeviceToHost;
+		break;
+	default:
+		return -1;
+	}
+
+	check_cudaruntimecall(cudaMemcpy(dst, src, size, kind), rc);
+	return rc;
+}
+
+static int libcufile_stream_sync(void)
+{
+	int rc;
+
+	check_cudaruntimecall(cudaStreamSynchronize(NULL), rc);
+	return rc;
+}
+
+static int libcufile_file_handle_register(int fd, void **handle)
+{
+	struct fio_libcufile_data *fcd;
+	CUfileError_t status;
+
+	fcd = calloc(1, sizeof(*fcd));
+	if (fcd == NULL)
+		return ENOMEM;
+
+	fcd->cf_descr.handle.fd = fd;
+	fcd->cf_descr.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
+	status = cuFileHandleRegister(&fcd->cf_handle, &fcd->cf_descr);
+	if (status.err != CU_FILE_SUCCESS) {
+		log_err("cufile register: err=%d:%s\n", status.err,
+			fio_libcufile_get_cuda_error(status));
+		free(fcd);
+		return EINVAL;
+	}
+
+	*handle = fcd;
+	return 0;
+}
+
+static void libcufile_file_handle_deregister(void *handle)
+{
+	struct fio_libcufile_data *fcd = handle;
+
+	cuFileHandleDeregister(fcd->cf_handle);
+	free(fcd);
+}
+
+static int libcufile_buf_register(void *mem, size_t size)
+{
+	CUfileError_t status;
+
+	status = cuFileBufRegister(mem, size, 0);
+	if (status.err != CU_FILE_SUCCESS) {
+		log_err("cuFileBufRegister: err=%d:%s\n", status.err,
+			fio_libcufile_get_cuda_error(status));
+		return -1;
+	}
+
+	return 0;
+}
+
+static void libcufile_buf_deregister(void *mem)
+{
+	cuFileBufDeregister(mem);
+}
+
+static ssize_t libcufile_read(void *handle, void *mem, size_t size, unsigned long long offset, size_t mem_offset)
+{
+	struct fio_libcufile_data *fcd = handle;
+	return cuFileRead(fcd->cf_handle, mem, size, offset, mem_offset);
+}
+
+static ssize_t libcufile_write(void *handle, const void *mem, size_t size, unsigned long long offset, size_t mem_offset)
+{
+	struct fio_libcufile_data *fcd = handle;
+	return cuFileWrite(fcd->cf_handle, mem, size, offset, mem_offset);
+}
+
+static const char *libcufile_op_error_string(int error_code)
+{
+	return cufileop_status_error(error_code);
+}
+
 /*
  * Assign GPU to subjob roundrobin, similar to how multiple
  * entries in 'directory' are handled by fio.
@@ -159,19 +310,15 @@ static int fio_libcufile_find_gpu_id(struct thread_data *td)
 static int fio_libcufile_init(struct thread_data *td)
 {
 	struct libcufile_options *o = td->eo;
-	CUfileError_t status;
 	int initialized;
-	int rc;
 
 	pthread_mutex_lock(&running_lock);
 	if (running == 0) {
 		assert(cufile_initialized == 0);
 		if (o->cuda_io == IO_CUFILE) {
 			/* only open the driver if this is the first worker thread */
-			status = cuFileDriverOpen();
-			if (status.err != CU_FILE_SUCCESS)
-				log_err("cuFileDriverOpen: err=%d:%s\n", status.err,
-					fio_libcufile_get_cuda_error(status));
+			if (libcufile_driver_open() != 0)
+				log_err("libcufile_driver_open failed\n");
 			else
 				cufile_initialized = 1;
 		}
@@ -188,8 +335,7 @@ static int fio_libcufile_init(struct thread_data *td)
 		return 1;
 
 	dprint(FD_MEM, "Subjob %d uses GPU %d\n", td->subjob_number, o->my_gpu_id);
-	check_cudaruntimecall(cudaSetDevice(o->my_gpu_id), rc);
-	if (rc != 0)
+	if (libcufile_set_device(o->my_gpu_id) != 0)
 		return 1;
 
 	return 0;
@@ -209,10 +355,9 @@ static inline int fio_libcufile_pre_write(struct thread_data *td,
 			  This isn't done in the non-verify case because the data would
 			  already be in GPU memory in a normal cuFile application.
 			*/
-			check_cudaruntimecall(cudaMemcpy(((char*) o->cu_mem_ptr) + gpu_offset,
-							 io_u->xfer_buf,
-							 io_u->xfer_buflen,
-							 cudaMemcpyHostToDevice), rc);
+			rc = libcufile_memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
+					io_u->xfer_buf,
+					io_u->xfer_buflen, MEMCPY_DIRECTION_H2D);
 			if (rc != 0) {
 				log_err("DDIR_WRITE cudaMemcpy H2D failed\n");
 				io_u->error = EIO;
@@ -227,10 +372,9 @@ static inline int fio_libcufile_pre_write(struct thread_data *td,
 		  of this is to add the overhead of cudaMemcpy() that would be
 		  present in a POSIX I/O CUDA application.
 		*/
-		check_cudaruntimecall(cudaMemcpy(o->junk_buf + gpu_offset,
-						 ((char*) o->cu_mem_ptr) + gpu_offset,
-						 io_u->xfer_buflen,
-						 cudaMemcpyDeviceToHost), rc);
+		rc = libcufile_memcpy(o->junk_buf + gpu_offset,
+				((char*) o->cu_mem_ptr) + gpu_offset,
+				io_u->xfer_buflen, MEMCPY_DIRECTION_D2H);
 		if (rc != 0) {
 			log_err("DDIR_WRITE cudaMemcpy D2H failed\n");
 			io_u->error = EIO;
@@ -254,10 +398,10 @@ static inline int fio_libcufile_post_read(struct thread_data *td,
 	if (o->cuda_io == IO_CUFILE) {
 		if (td->o.verify) {
 			/* Copy GPU memory to CPU buffer for verify */
-			check_cudaruntimecall(cudaMemcpy(io_u->xfer_buf,
+			rc = libcufile_memcpy(io_u->xfer_buf,
 							 ((char*) o->cu_mem_ptr) + gpu_offset,
 							 io_u->xfer_buflen,
-							 cudaMemcpyDeviceToHost), rc);
+							 MEMCPY_DIRECTION_D2H);
 			if (rc != 0) {
 				log_err("DDIR_READ cudaMemcpy D2H failed\n");
 				io_u->error = EIO;
@@ -265,10 +409,10 @@ static inline int fio_libcufile_post_read(struct thread_data *td,
 		}
 	} else if (o->cuda_io == IO_POSIX) {
 		/* POSIX I/O read, copy the CPU buffer to GPU memory */
-		check_cudaruntimecall(cudaMemcpy(((char*) o->cu_mem_ptr) + gpu_offset,
+		rc = libcufile_memcpy(((char*) o->cu_mem_ptr) + gpu_offset,
 						 io_u->xfer_buf,
 						 io_u->xfer_buflen,
-						 cudaMemcpyHostToDevice), rc);
+						 MEMCPY_DIRECTION_H2D);
 		if (rc != 0) {
 			log_err("DDIR_READ cudaMemcpy H2D failed\n");
 			io_u->error = EIO;
@@ -286,7 +430,8 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 					     struct io_u *io_u)
 {
 	struct libcufile_options *o = td->eo;
-	struct fio_libcufile_data *fcd = FILE_ENG_DATA(io_u->file);
+
+	void *file_handle = FILE_ENG_DATA(io_u->file);
 	unsigned long long io_offset;
 	ssize_t sz;
 	ssize_t remaining;
@@ -294,7 +439,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 	size_t gpu_offset;
 	int rc;
 
-	if (o->cuda_io == IO_CUFILE && fcd == NULL) {
+	if (o->cuda_io == IO_CUFILE && file_handle == NULL) {
 		io_u->error = EINVAL;
 		td_verror(td, EINVAL, "xfer");
 		return FIO_Q_COMPLETED;
@@ -359,7 +504,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 			assert(gpu_offset + xfered <= o->total_mem);
 			if (io_u->ddir == DDIR_READ) {
 				if (o->cuda_io == IO_CUFILE) {
-					sz = cuFileRead(fcd->cf_handle, o->cu_mem_ptr, remaining,
+					sz = libcufile_read(file_handle, o->cu_mem_ptr, remaining,
 							io_offset + xfered, gpu_offset + xfered);
 					if (sz == -1) {
 						io_u->error = errno;
@@ -367,7 +512,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 					} else if (sz < 0) {
 						io_u->error = EIO;
 						log_err("cuFileRead: err=%ld:%s\n", sz,
-							cufileop_status_error(-sz));
+							libcufile_op_error_string(-sz));
 					}
 				} else if (o->cuda_io == IO_POSIX) {
 					sz = pread(io_u->file->fd, ((char*) io_u->xfer_buf) + xfered,
@@ -383,7 +528,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 				}
 			} else if (io_u->ddir == DDIR_WRITE) {
 				if (o->cuda_io == IO_CUFILE) {
-					sz = cuFileWrite(fcd->cf_handle, o->cu_mem_ptr, remaining,
+					sz = be->write(file_handle, o->cu_mem_ptr, remaining,
 							 io_offset + xfered, gpu_offset + xfered);
 					if (sz == -1) {
 						io_u->error = errno;
@@ -391,7 +536,7 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 					} else if (sz < 0) {
 						io_u->error = EIO;
 						log_err("cuFileWrite: err=%ld:%s\n", sz,
-							cufileop_status_error(-sz));
+							libcufile_op_error_string(-sz));
 					}
 				} else if (o->cuda_io == IO_POSIX) {
 					sz = pwrite(io_u->file->fd,
@@ -447,39 +592,27 @@ static enum fio_q_status fio_libcufile_queue(struct thread_data *td,
 static int fio_libcufile_open_file(struct thread_data *td, struct fio_file *f)
 {
 	struct libcufile_options *o = td->eo;
-	struct fio_libcufile_data *fcd = NULL;
+	void *handle = NULL;
 	int rc;
-	CUfileError_t status;
 
 	rc = generic_open_file(td, f);
 	if (rc)
 		return rc;
 
 	if (o->cuda_io == IO_CUFILE) {
-		fcd = calloc(1, sizeof(*fcd));
-		if (fcd == NULL) {
-			rc = ENOMEM;
-			goto exit_err;
-		}
-
-		fcd->cf_descr.handle.fd = f->fd;
-		fcd->cf_descr.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-		status = cuFileHandleRegister(&fcd->cf_handle, &fcd->cf_descr);
-		if (status.err != CU_FILE_SUCCESS) {
-			log_err("cufile register: err=%d:%s\n", status.err,
-				fio_libcufile_get_cuda_error(status));
-			rc = EINVAL;
+		rc = libcufile_file_handle_register(f->fd, &handle);
+		if (rc != 0) {
 			goto exit_err;
 		}
 	}
 
-	FILE_SET_ENG_DATA(f, fcd);
+	FILE_SET_ENG_DATA(f, handle);
 	return 0;
 
 exit_err:
-	if (fcd) {
-		free(fcd);
-		fcd = NULL;
+	if (handle) {
+		free(handle);
+		handle = NULL;
 	}
 	if (f) {
 		int rc2 = generic_close_file(td, f);
@@ -491,13 +624,13 @@ exit_err:
 
 static int fio_libcufile_close_file(struct thread_data *td, struct fio_file *f)
 {
-	struct fio_libcufile_data *fcd = FILE_ENG_DATA(f);
+	void *handle = FILE_ENG_DATA(f);
 	int rc;
 
-	if (fcd != NULL) {
-		cuFileHandleDeregister(fcd->cf_handle);
+	if (handle != NULL) {
+		libcufile_file_handle_deregister(handle);
 		FILE_SET_ENG_DATA(f, NULL);
-		free(fcd);
+		free(handle);
 	}
 
 	rc = generic_close_file(td, f);
@@ -509,7 +642,6 @@ static int fio_libcufile_iomem_alloc(struct thread_data *td, size_t total_mem)
 {
 	struct libcufile_options *o = td->eo;
 	int rc;
-	CUfileError_t status;
 
 	o->total_mem = total_mem;
 	o->logged = 0;
@@ -530,20 +662,17 @@ static int fio_libcufile_iomem_alloc(struct thread_data *td, size_t total_mem)
 	}
 
 	dprint(FD_MEM, "Alloc %zu for GPU %d\n", total_mem, o->my_gpu_id);
-	check_cudaruntimecall(cudaMalloc(&o->cu_mem_ptr, total_mem), rc);
+	rc = libcufile_malloc(&o->cu_mem_ptr, total_mem);
 	if (rc != 0)
 		goto exit_error;
-	check_cudaruntimecall(cudaMemset(o->cu_mem_ptr, 0xab, total_mem), rc);
+	rc = libcufile_memset(o->cu_mem_ptr, 0xab, total_mem);
 	if (rc != 0)
 		goto exit_error;
 
 	if (o->cuda_io == IO_CUFILE) {
-		status = cuFileBufRegister(o->cu_mem_ptr, total_mem, 0);
-		if (status.err != CU_FILE_SUCCESS) {
-			log_err("cuFileBufRegister: err=%d:%s\n", status.err,
-				fio_libcufile_get_cuda_error(status));
+		rc = libcufile_buf_register(o->cu_mem_ptr, total_mem);
+		if (rc != 0)
 			goto exit_error;
-		}
 	}
 
 	return 0;
@@ -558,7 +687,7 @@ exit_error:
 		o->junk_buf = NULL;
 	}
 	if (o->cu_mem_ptr) {
-		cudaFree(o->cu_mem_ptr);
+		libcufile_free(o->cu_mem_ptr);
 		o->cu_mem_ptr = NULL;
 	}
 	return 1;
@@ -574,8 +703,8 @@ static void fio_libcufile_iomem_free(struct thread_data *td)
 	}
 	if (o->cu_mem_ptr) {
 		if (o->cuda_io == IO_CUFILE)
-			cuFileBufDeregister(o->cu_mem_ptr);
-		cudaFree(o->cu_mem_ptr);
+			libcufile_buf_deregister(o->cu_mem_ptr);
+		libcufile_free(o->cu_mem_ptr);
 		o->cu_mem_ptr = NULL;
 	}
 	if (td->orig_buffer) {
@@ -595,7 +724,7 @@ static void fio_libcufile_cleanup(struct thread_data *td)
 		/* only close the driver if initialized and
 		   this is the last worker thread */
 		if (o->cuda_io == IO_CUFILE && cufile_initialized)
-			cuFileDriverClose();
+			libcufile_driver_close();
 		cufile_initialized = 0;
 	}
 	pthread_mutex_unlock(&running_lock);
