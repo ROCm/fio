@@ -119,7 +119,20 @@ ifdef CONFIG_LINUX_EXT4_MOVE_EXTENT
   SOURCE += engines/e4defrag.c
 endif
 ifdef CONFIG_LIBCUFILE
-  SOURCE += engines/libcufile.c engines/gpuaccel.c
+  SOURCE += engines/libcufile.c
+  SHARED_GPUACCEL_SOURCE = 1
+endif
+ifdef CONFIG_LIBHIPFILE
+  ROCM_PATH ?= /opt/rocm
+  hipfile_SRCS = engines/libhipfile.c
+  hipfile_CFLAGS += -I${ROCM_PATH}/include
+  LDFLAGS += -L${ROCM_PATH}/lib -Wl,-rpath,${ROCM_PATH}/lib
+  hipfile_LIBS = -lamdhip64 -lhipfile
+  ENGINES += hipfile
+  SHARED_GPUACCEL_SOURCE = 1
+endif
+ifdef SHARED_GPUACCEL_SOURCE
+  SOURCE += engines/gpuaccel.c
 endif
 ifdef CONFIG_LINUX_SPLICE
   SOURCE += engines/splice.c
