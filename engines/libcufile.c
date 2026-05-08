@@ -236,6 +236,9 @@ static const char *libcufile_op_error_string(int error_code)
 
 static const struct gpuaccel_backend libcufile_backend = {
 	.name = "cufile",
+	.sync_after_posix_write_copy = 0,
+	.sync_after_verify_read_copy = 0,
+	.sync_after_memset = 0,
 	.driver_open = libcufile_driver_open,
 	.driver_close = libcufile_driver_close,
 	.set_device = libcufile_set_device,

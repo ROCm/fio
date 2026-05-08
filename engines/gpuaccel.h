@@ -22,6 +22,11 @@ enum {
 
 struct gpuaccel_backend {
 	const char *name;
+
+	int sync_after_posix_write_copy;
+	int sync_after_verify_read_copy;
+	int sync_after_memset;
+
 	int (*driver_open)(void);
 	void (*driver_close)(void);
 

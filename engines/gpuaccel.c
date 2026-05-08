@@ -142,6 +142,13 @@ static inline int fio_gpuaccel_pre_write(struct thread_data *td,
 			log_err("DDIR_WRITE %s memcpy D2H failed\n", be->name);
 			io_u->error = EIO;
 		}
+		if (be->sync_after_posix_write_copy) {
+			rc = be->stream_sync();
+			if (rc != 0) {
+				log_err("DDIR_WRITE stream synchronize failed\n");
+				io_u->error = EIO;
+			}
+		}
 	} else {
 		log_err("Illegal %s IO type: %d\n", be->name, o->io_mode);
 		assert(0);
@@ -180,6 +187,13 @@ static inline int fio_gpuaccel_post_read(struct thread_data *td,
 		if (rc != 0) {
 			log_err("DDIR_READ %s memcpy H2D failed\n", be->name);
 			io_u->error = EIO;
+		}
+		if (be->sync_after_verify_read_copy) {
+			rc = be->stream_sync();
+			if (rc != 0) {
+				log_err("DDIR_READ stream synchronize failed\n");
+				io_u->error = EIO;
+			}
 		}
 	} else {
 		log_err("Illegal %s IO type: %d\n", be->name, o->io_mode);
@@ -435,7 +449,11 @@ int fio_gpuaccel_iomem_alloc(struct thread_data *td, size_t total_mem)
 	rc = be->memset(o->gpu_mem_ptr, 0xab, total_mem);
 	if (rc != 0)
 		goto exit_error;
-
+	if (be->sync_after_memset) {
+		rc = be->stream_sync();
+		if (rc != 0)
+			goto exit_error;
+	}
 	if (o->io_mode == IO_DIRECT) {
 		rc = be->buf_register(o->gpu_mem_ptr, total_mem);
 		if (rc != 0)
