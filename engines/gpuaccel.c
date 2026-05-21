@@ -12,7 +12,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <pthread.h>
 
 #include "../fio.h"
 #include "gpuaccel.h"
@@ -21,10 +20,6 @@
 
 #define LOGGED_BUFLEN_NOT_ALIGNED     0x01
 #define LOGGED_GPU_OFFSET_NOT_ALIGNED 0x02
-
-static int running = 0;
-static int gpuaccel_initialized = 0;
-static pthread_mutex_t running_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Assign GPU to subjob roundrobin, similar to how multiple
@@ -74,20 +69,20 @@ int fio_gpuaccel_init(struct thread_data *td)
 	const struct gpuaccel_backend *be = o->backend;
 	int initialized;
 
-	pthread_mutex_lock(&running_lock);
-	if (running == 0) {
-		assert(gpuaccel_initialized == 0);
+	pthread_mutex_lock(be->running_lock);
+	if (*be->running == 0) {
+		assert(*be->initialized == 0);
 		if (o->io_mode == IO_DIRECT) {
 			/* only open the driver if this is the first worker thread */
 			if (be->driver_open() != 0)
 				log_err("%s driver_open failed\n", be->name);
 			else
-				gpuaccel_initialized = 1;
+				*be->initialized = 1;
 		}
 	}
-	running++;
-	initialized = gpuaccel_initialized;
-	pthread_mutex_unlock(&running_lock);
+	(*be->running)++;
+	initialized = *be->initialized;
+	pthread_mutex_unlock(be->running_lock);
 
 	if (o->io_mode == IO_DIRECT && !initialized)
 		return 1;
@@ -504,15 +499,15 @@ void fio_gpuaccel_cleanup(struct thread_data *td)
 	struct gpuaccel_options *o = td->eo;
 	const struct gpuaccel_backend *be = o->backend;
 
-	pthread_mutex_lock(&running_lock);
-	running--;
-	assert(running >= 0);
-	if (running == 0) {
+	pthread_mutex_lock(be->running_lock);
+	(*be->running)--;
+	assert(*be->running >= 0);
+	if (*be->running == 0) {
 		/* only close the driver if initialized and
 		   this is the last worker thread */
-		if (o->io_mode == IO_DIRECT && gpuaccel_initialized)
+		if (o->io_mode == IO_DIRECT && *be->initialized)
 			be->driver_close();
-		gpuaccel_initialized = 0;
+		*be->initialized = 0;
 	}
-	pthread_mutex_unlock(&running_lock);
+	pthread_mutex_unlock(be->running_lock);
 }

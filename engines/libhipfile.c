@@ -209,11 +209,18 @@ static const char *libhipfile_op_error_string(int error_code)
 	return hipFileGetOpErrorString(error_code);
 }
 
+static int running = 0;
+static int initialized = 0;
+static pthread_mutex_t running_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static const struct gpuaccel_backend libhipfile_backend = {
 	.name = "hipfile",
     .sync_after_posix_write_copy = 1,
 	.sync_after_verify_read_copy = 1,
 	.sync_after_memset = 1,
+	.running = &running,
+	.initialized = &initialized,
+	.running_lock = &running_lock,
 	.driver_open = libhipfile_driver_open,
 	.driver_close = libhipfile_driver_close,
 	.set_device = libhipfile_set_device,
