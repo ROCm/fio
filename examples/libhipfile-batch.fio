@@ -1,0 +1,47 @@
+# Example hipFile job, using the asynchronous hipFile batch API
+# (hipFileBatchIOSetUp/Submit/GetStatus).
+#
+# NOTE: As of this writing the hipfile batch backend is only partially
+# implemented -- hipFileBatchIOSubmit accepts requests but performs no I/O, and
+# hipFileBatchIOGetStatus/Destroy return "Not Implemented". Running this job
+# therefore surfaces that error on the first getevents call. It exists so fio
+# can drive the hipfile batch implementation as it lands.
+#
+# Required environment variables:
+#     GPU_DEV_IDS : refer to option 'gpu_dev_ids'
+#     FIO_DIR     : 'directory'. This job uses rocm_io=hipfile, so path(s) must
+#                   point to hipFile supported filesystem(s)
+#
+
+[global]
+ioengine=libhipfile
+directory=${FIO_DIR}
+gpu_dev_ids=${GPU_DEV_IDS}
+rocm_io=hipfile
+# hipfile_mode=batch selects the async batch submission model. Requires
+# rocm_io=hipfile (POSIX I/O has no async path).
+hipfile_mode=batch
+# 'direct' must be 1 when using rocm_io=hipfile
+direct=1
+# iodepth sets the batch handle capacity (max outstanding requests).
+iodepth=16
+# Performance is negatively affected if 'bs' is not a multiple of 4k.
+# Refer to ROCm hipFile documentation.
+bs=1m
+size=256m
+numjobs=1
+# hipMalloc fails if too many processes attach to the GPU, use threads.
+thread
+group_reporting=1
+
+[read]
+rw=read
+
+[write]
+rw=write
+
+[randread]
+rw=randread
+
+[randwrite]
+rw=randwrite

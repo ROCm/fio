@@ -1,0 +1,45 @@
+# Example hipFile job, using the asynchronous hipFile stream API
+# (hipFileReadAsync/hipFileWriteAsync).
+#
+# Required environment variables:
+#     GPU_DEV_IDS : refer to option 'gpu_dev_ids'
+#     FIO_DIR     : 'directory'. This job uses rocm_io=hipfile, so path(s) must
+#                   point to hipFile supported filesystem(s)
+#
+
+[global]
+ioengine=libhipfile
+directory=${FIO_DIR}
+gpu_dev_ids=${GPU_DEV_IDS}
+rocm_io=hipfile
+# hipfile_mode=stream selects the async stream submission model. Requires
+# rocm_io=hipfile (POSIX I/O has no async path).
+hipfile_mode=stream
+# 'direct' must be 1 when using rocm_io=hipfile
+direct=1
+# iodepth drives the number of concurrent async ops kept in flight.
+iodepth=16
+# Performance is negatively affected if 'bs' is not a multiple of 4k.
+# Refer to ROCm hipFile documentation.
+bs=1m
+size=256m
+numjobs=1
+# hipMalloc fails if too many processes attach to the GPU, use threads.
+thread
+group_reporting=1
+
+[read]
+rw=read
+
+[write]
+rw=write
+
+[randread]
+rw=randread
+
+[randwrite]
+rw=randwrite
+
+[verify]
+rw=write
+verify=crc32c
